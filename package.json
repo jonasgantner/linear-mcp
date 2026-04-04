@@ -1,0 +1,13 @@
+{
+  "name": "linear-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for Linear with 49 tools across 13 domains. Raw GraphQL, multi-workspace, Bun/TypeScript.",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "start": "bun run index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.11.0"
+  }
+}
