@@ -1,9 +1,9 @@
 # Linear MCP Server — Capabilities Reference
 
 **Runtime**: Bun/TypeScript, raw GraphQL
-**Tools**: 49
+**Tools**: 56
 **Workspaces**: Auto-discovered from `LINEAR_<NAME>_TOKEN` env vars. Every tool accepts optional `workspace` param.
-**Auth**: PAT via `Authorization` header (no Bearer prefix)
+**Auth**: PAT via `Authorization` header (no `@linear/sdk`, no Bearer prefix)
 **Throttle**: 250ms per workspace
 
 ---
@@ -219,6 +219,38 @@ Content (initially hidden)
 Projects and initiatives use Slack-style emoji codes: `:rocket:`, `:wrench:`, `:test_tube:`.
 Reactions use plain names: `+1`, `heart`, `rocket`.
 
+### Attachments (5 tools)
+
+| Tool | Description | Key params |
+|---|---|---|
+| `create_attachment` | Attach a URL/resource to an issue | `issueId`*, `title`*, `url`*, `subtitle`, `iconUrl`, `metadata` (JSON), `commentBody` |
+| `update_attachment` | Update attachment properties | `id`*, `title`, `subtitle`, `url`, `metadata` |
+| `delete_attachment` | Delete an attachment | `id`* |
+| `link_attachment_url` | Simplified URL linking with auto-detected metadata | `issueId`*, `url`*, `title` |
+| `link_attachment_discord` | Link a Discord message (requires Discord OAuth in workspace) | `issueId`*, `channelId`*, `messageId`*, `url`*, `title` |
+
+**Tested findings:**
+- `commentBody` on `create_attachment` auto-creates a comment on the issue with the given body text.
+- `metadata` is free-form JSON. Useful for storing source context (e.g., Discord channel, Notion page ID).
+- `link_attachment_discord` requires Discord OAuth integration in the Linear workspace. Returns "Unknown integration" error without it. Use `create_attachment` with a Discord URL as fallback.
+- Without `title`, `link_attachment_discord` defaults to "Discord message". Subtitle is generic Discord boilerplate, not the actual message content.
+- `link_attachment_url` sets `sourceType: "api"`. `create_attachment` sets `sourceType: "unknown"`.
+- Multiple attachments per issue supported. Visible in `get_issue` under `attachments.nodes`.
+- `iconUrl` accepts any URL (e.g., `https://cdn.simpleicons.org/discord`).
+
+### Batch Operations (2 tools)
+
+| Tool | Description | Key params |
+|---|---|---|
+| `issue_batch_create` | Create multiple issues in one call | `issues[]` (array of IssueCreateInput, each needs `teamId` + `title`) |
+| `issue_batch_update` | Apply same update to multiple issues | `ids[]` (UUIDs), plus any IssueUpdateInput field |
+
+**Tested findings:**
+- Supports all `create_issue` fields including `parentId` (sub-issues), `priority`, `dueDate`, `labelIds`.
+- Cross-team batch create works: different `teamId` per issue in the same call.
+- Batch update applies identical changes to all listed IDs. Supports `null` to clear optional fields.
+- Batch update supports `addedLabelIds`, `removedLabelIds`, `projectId`, `cycleId`, etc.
+
 ---
 
 ## Known Limitations
@@ -230,11 +262,9 @@ Reactions use plain names: `+1`, `heart`, `rocket`.
 5. **No issue templates** — templates are UI-only, not exposed via GraphQL API.
 6. **No notification management** — `notificationArchive`, `notificationMarkReadAll` exist but not yet implemented.
 7. **No workflow state management** — states are read via `get_teams(include: ["states"])` but cannot be created/updated.
-8. **No bulk operations** — `issueBatchCreate`/`issueBatchUpdate` exist but not yet implemented.
-9. **No attachments** — file upload/link not yet implemented.
-10. **Initiative description max 255 chars** — use `content` field for longer rich body (markdown).
-11. **One comment thread per update** — project/initiative updates allow only one top-level comment. Use `parentId` for replies within that thread.
-12. **Project description field is `content`** — not `description` on `ProjectUpdateInput`. Same for initiatives.
+8. **Initiative description max 255 chars** — use `content` field for longer rich body (markdown).
+9. **One comment thread per update** — project/initiative updates allow only one top-level comment. Use `parentId` for replies within that thread.
+10. **Project description field is `content`** — not `description` on `ProjectUpdateInput`. Same for initiatives.
 
 ---
 

@@ -77,7 +77,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
-## Tools (49)
+## Tools (56)
 
 ### Issues (7)
 `search_issues` / `get_issue` / `create_issue` / `update_issue` / `delete_issue` / `archive_issue` / `unarchive_issue`
@@ -118,6 +118,12 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 ### Users (1)
 `get_viewer`
 
+### Attachments (5)
+`create_attachment` / `update_attachment` / `delete_attachment` / `link_attachment_url` / `link_attachment_discord`
+
+### Batch Operations (2)
+`issue_batch_create` / `issue_batch_update`
+
 See [CAPABILITIES.md](CAPABILITIES.md) for detailed tool reference with parameters, tested findings, and known limitations.
 
 ## Architecture
@@ -140,6 +146,8 @@ linear-mcp/
     ├── labels.ts      # 3 label tools
     ├── relations.ts   # 2 relation tools
     ├── reactions.ts   # 2 reaction tools
+    ├── attachments.ts # 5 attachment tools
+    ├── batch.ts       # 2 batch operation tools
     ├── notifications.ts # 1 notification tool
     ├── teams.ts       # 1 team tool
     └── users.ts       # 1 user tool

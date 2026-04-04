@@ -31,6 +31,7 @@ const GET_ISSUE_QUERY = `
     issue(id: $id) {
       ${ISSUE_FIELDS}
       children { nodes { id identifier title state { name } priority } }
+      attachments { nodes { id title subtitle url sourceType metadata createdAt } }
       comments { nodes { id body user { name } createdAt updatedAt resolvedAt parent { id } children { nodes { id body user { name } createdAt } } } }
       relations { nodes { id type relatedIssue { id identifier title } } }
       inverseRelations { nodes { id type issue { id identifier title } } }

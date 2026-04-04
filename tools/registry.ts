@@ -17,6 +17,8 @@ import { relationTools } from './relations.js'
 import { reactionTools } from './reactions.js'
 import { documentTools } from './documents.js'
 import { viewTools } from './views.js'
+import { attachmentTools } from './attachments.js'
+import { batchTools } from './batch.js'
 
 const allTools: ToolDef[] = [
   ...userTools,
@@ -32,6 +34,8 @@ const allTools: ToolDef[] = [
   ...reactionTools,
   ...documentTools,
   ...viewTools,
+  ...attachmentTools,
+  ...batchTools,
 ]
 
 const toolMap = new Map<string, ToolDef>()
