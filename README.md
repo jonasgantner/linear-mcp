@@ -1,6 +1,6 @@
 # linear-mcp
 
-MCP server for [Linear](https://linear.app) with **49 tools** across 13 domains. Built with Bun, TypeScript, and raw GraphQL (no SDK dependency).
+MCP server for [Linear](https://linear.app) with **56 tools** across 15 domains. Built with Bun, TypeScript, and raw GraphQL (no SDK dependency).
 
 Multi-workspace support, comprehensive issue/project/initiative management, views, documents, cycles, labels, reactions, and more.
 
