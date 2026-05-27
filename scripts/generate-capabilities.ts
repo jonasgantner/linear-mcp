@@ -19,6 +19,7 @@ const domainTitles: Record<string, string> = {
   labels: 'Labels',
   initiatives: 'Initiatives',
   documents: 'Documents',
+  favorites: 'Favorites',
   views: 'Views',
   notifications: 'Notifications',
   attachments: 'Attachments',
@@ -57,6 +58,10 @@ function hasPagination(inputSchema: JsonObject): boolean {
   return Object.prototype.hasOwnProperty.call(props, 'first') && Object.prototype.hasOwnProperty.call(props, 'after')
 }
 
+function renderExampleArgs(args: Record<string, unknown>): string {
+  return `\`${JSON.stringify(args).replace(/`/g, '\\`')}\``
+}
+
 function render(): string {
   const tools = getToolInventory()
   const domains = [...new Set(tools.map(tool => tool.domain ?? 'uncategorized'))]
@@ -77,7 +82,7 @@ function render(): string {
     '',
     '- Runtime tool names, descriptions, schemas, domains, side effects, and feature gates live in `tools/*.ts` and `tools/registry.ts`.',
     '- This file is generated from the live registry metadata.',
-    '- Agent operating policy lives in `/Users/jonas/.agents/skills/linear/SKILL.md`.',
+    '- Global Linear behavior lives in `/Users/jonas/.codex/AGENTS.md`; `/Users/jonas/.agents/skills/linear/SKILL.md` covers MCP routing, live discovery, and tool mechanics.',
     '- Workspace state such as team IDs, workflow states, labels, project statuses, templates, and custom views must be queried live via the MCP.',
     '',
     '## Discovery Model',
@@ -127,6 +132,17 @@ function render(): string {
         escapeCell(tool.featureGate),
         escapeCell(tool.description),
       ].join(' | ').replace(/^/, '| ').replace(/$/, ' |'))
+    }
+    const toolsWithExamples = domainTools.filter(tool => Array.isArray(tool.examples) && tool.examples.length > 0)
+    if (toolsWithExamples.length > 0) {
+      lines.push('', 'Examples:', '')
+      for (const tool of toolsWithExamples) {
+        for (const example of tool.examples ?? []) {
+          const title = example.title ? ` (${escapeCell(example.title)})` : ''
+          const description = example.description ? ` - ${escapeCell(example.description)}` : ''
+          lines.push(`- \`${tool.name}\`${title}: ${renderExampleArgs(example.args)}${description}`)
+        }
+      }
     }
   }
 

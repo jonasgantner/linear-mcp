@@ -5,11 +5,15 @@
   "scripts": {
     "start": "bun run index.ts",
     "build": "bun build ./index.ts --target=bun --outdir /tmp/linear-mcp-build",
+    "ci": "bun run docs:check && bun run build && bun run smoke:tools",
+    "prepare:repo": "bun run docs:capabilities && bun run verify",
+    "verify": "bun run ci && bun run smoke:views",
     "docs:capabilities": "bun run scripts/generate-capabilities.ts",
     "docs:check": "bun run scripts/generate-capabilities.ts --check",
-    "smoke:tools": "node /Users/jonas/.agents/mcp/tools/test-mcp.mjs /Users/jonas/.agents/mcp/wrappers/linear.sh",
-    "smoke:views": "node /Users/jonas/.agents/mcp/tools/test-mcp.mjs /Users/jonas/.agents/mcp/wrappers/linear.sh --call list_views '{\"workspace\":\"personal\",\"first\":1}'",
-    "smoke:files": "bash -lc 'printf \"Linear MCP upload smoke test\\\\nCreated: 2026-05-26\\\\n\" > /tmp/linear-mcp-upload-smoke.txt && node /Users/jonas/.agents/mcp/tools/test-mcp.mjs /Users/jonas/.agents/mcp/wrappers/linear.sh --call upload_file '\\''{\"workspace\":\"personal\",\"path\":\"/tmp/linear-mcp-upload-smoke.txt\"}'\\'''"
+    "smoke:tools": "node scripts/smoke-mcp.mjs bun index.ts",
+    "smoke:tools:local": "node scripts/smoke-mcp.mjs /Users/jonas/.agents/mcp/wrappers/linear.sh",
+    "smoke:views": "node scripts/smoke-mcp.mjs /Users/jonas/.agents/mcp/wrappers/linear.sh --call list_views '{\"workspace\":\"personal\",\"first\":1}'",
+    "smoke:files": "bash -lc 'printf \"Linear MCP upload smoke test\\\\nCreated: 2026-05-26\\\\n\" > /tmp/linear-mcp-upload-smoke.txt && node scripts/smoke-mcp.mjs /Users/jonas/.agents/mcp/wrappers/linear.sh --call upload_file '\\''{\"workspace\":\"personal\",\"path\":\"/tmp/linear-mcp-upload-smoke.txt\"}'\\'''"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.11.0",

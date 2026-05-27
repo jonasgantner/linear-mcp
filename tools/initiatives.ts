@@ -356,7 +356,7 @@ export const initiativeTools: ToolDef[] = [
         status: { type: 'string', description: 'Status: Planned, Active, or Completed' },
         ownerId: { type: 'string', description: 'Owner user UUID' },
         color: { type: 'string', description: 'Color hex (e.g. "#5e6ad2")' },
-        icon: { type: 'string', description: 'Initiative icon (:emoji_name: format)' },
+        icon: { type: 'string', description: 'Initiative icon. Linear accepts icon names such as "MagicWand" in current smoke coverage.' },
         targetDate: { type: 'string', description: 'Target date (YYYY-MM-DD)' },
         targetDateResolution: { type: 'string', description: 'Date resolution for targetDate (e.g. day, month, quarter, year)' },
         sortOrder: { type: 'number', description: 'Manual sort order' },
@@ -364,6 +364,18 @@ export const initiativeTools: ToolDef[] = [
       },
       required: ['name'],
     },
+    examples: [
+      {
+        title: 'Smoke initiative',
+        args: {
+          workspace: 'personal',
+          name: 'MCP Smoke Initiative',
+          status: 'Planned',
+          icon: 'MagicWand',
+          color: '#5e6ad2',
+        },
+      },
+    ],
     async handler(args) {
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
@@ -386,7 +398,7 @@ export const initiativeTools: ToolDef[] = [
         status: { type: 'string', description: 'Status: Planned, Active, or Completed' },
         ownerId: { type: 'string', description: 'Owner user UUID' },
         color: { type: 'string', description: 'Color hex' },
-        icon: { type: 'string', description: 'Initiative icon (:emoji_name: format)' },
+        icon: { type: 'string', description: 'Initiative icon. Linear accepts icon names such as "MagicWand" in current smoke coverage.' },
         targetDate: { type: 'string', description: 'Target date (YYYY-MM-DD)' },
         targetDateResolution: { type: 'string', description: 'Date resolution for targetDate (e.g. day, month, quarter, year)' },
         sortOrder: { type: 'number', description: 'Manual sort order' },

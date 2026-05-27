@@ -10,6 +10,7 @@ export type ToolDomain =
   | 'labels'
   | 'initiatives'
   | 'documents'
+  | 'favorites'
   | 'views'
   | 'notifications'
   | 'attachments'
@@ -21,6 +22,7 @@ export type ToolSideEffect = 'read' | 'write' | 'delete' | 'upload'
 
 export type ToolExample = {
   title?: string
+  description?: string
   args: Record<string, unknown>
 }
 

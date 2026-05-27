@@ -402,7 +402,7 @@ export const projectTools: ToolDef[] = [
         targetDate: { type: 'string', description: 'Target date (ISO 8601)' },
         startDateResolution: { type: 'string', description: 'Date resolution for startDate (e.g. day, month, quarter, year)' },
         targetDateResolution: { type: 'string', description: 'Date resolution for targetDate (e.g. day, month, quarter, year)' },
-        icon: { type: 'string', description: 'Project icon (:emoji_name: format)' },
+        icon: { type: 'string', description: 'Project icon. Linear accepts icon names such as "Briefcase" in current smoke coverage.' },
         color: { type: 'string', description: 'Color hex (e.g. "#5e6ad2")' },
         priority: { type: 'integer', description: '0=none, 1=urgent, 2=high, 3=medium, 4=low' },
         labelIds: { type: 'array', items: { type: 'string' }, description: 'Project label UUIDs' },
@@ -410,6 +410,19 @@ export const projectTools: ToolDef[] = [
       },
       required: ['name', 'teamIds'],
     },
+    examples: [
+      {
+        title: 'Sandbox project',
+        args: {
+          workspace: 'personal',
+          name: 'Linear MCP Sandbox',
+          teamIds: ['team-uuid'],
+          state: 'planned',
+          icon: 'Briefcase',
+          color: '#5e6ad2',
+        },
+      },
+    ],
     async handler(args) {
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
@@ -435,7 +448,7 @@ export const projectTools: ToolDef[] = [
         memberIds: { type: 'array', items: { type: 'string' }, description: 'Member user UUIDs' },
         startDate: { type: 'string', description: 'Start date (YYYY-MM-DD)' },
         targetDate: { type: 'string', description: 'Target date (YYYY-MM-DD)' },
-        icon: { type: 'string', description: 'Project icon (:emoji_name: format)' },
+        icon: { type: 'string', description: 'Project icon. Linear accepts icon names such as "Briefcase" in current smoke coverage.' },
         color: { type: 'string', description: 'Color hex (e.g. "#5e6ad2")' },
         priority: { type: 'integer', description: '0=none, 1=urgent, 2=high, 3=medium, 4=low' },
         labelIds: { type: 'array', items: { type: 'string' }, description: 'Project label UUIDs' },
@@ -604,7 +617,7 @@ export const projectTools: ToolDef[] = [
       type: 'object',
       properties: {
         ...WORKSPACE_PROP,
-        projectId: { type: 'string', description: 'Project UUID (required)' },
+        projectId: { type: 'string', description: 'Project UUID (required). Issues can be moved into this milestone with update_issue.projectMilestoneId or issue_batch_update.projectMilestoneId.' },
         body: { type: 'string', description: 'Update body (markdown)' },
         health: { type: 'string', description: 'Health status: onTrack, atRisk, or offTrack' },
       },

@@ -103,12 +103,18 @@ const SET_VIEW_PREFERENCES_MUTATION = `
 export const viewTools: ToolDef[] = [
   {
     name: 'list_views',
-    description: 'List saved custom views (filters).',
+    description:
+      'List saved custom views (filters). Use first <= 50 per page and paginate with after.',
     inputSchema: {
       type: 'object',
       properties: {
         ...WORKSPACE_PROP,
         ...PAGINATION_PROPS,
+        first: {
+          type: 'integer',
+          maximum: 50,
+          description: 'Number of views to return per page. Max 50.',
+        },
       },
     },
     async handler(args) {
@@ -141,7 +147,7 @@ export const viewTools: ToolDef[] = [
   },
   {
     name: 'create_view',
-    description: 'Create a saved custom view (filter). Use filterData for issue views, projectFilterData for project views.',
+    description: 'Create a saved custom view (filter). Use filterData for issue views, projectFilterData for project views. Icons accept Linear icon names such as "List" or "Health"; colors use hex.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -149,8 +155,8 @@ export const viewTools: ToolDef[] = [
         id: { type: 'string', description: 'Optional client-generated custom view UUID' },
         name: { type: 'string', description: 'View name (required)' },
         description: { type: 'string', description: 'View description' },
-        icon: { type: 'string', description: 'Icon (:emoji_name: format)' },
-        color: { type: 'string', description: 'Color hex' },
+        icon: { type: 'string', description: 'Linear icon name (e.g. "List", "Inbox", "Health")' },
+        color: { type: 'string', description: 'Color hex (e.g. "#5e6ad2")' },
         teamId: { type: 'string', description: 'Scope to team UUID' },
         projectId: { type: 'string', description: 'Scope to project UUID' },
         initiativeId: { type: 'string', description: 'Scope to initiative UUID' },
@@ -163,6 +169,29 @@ export const viewTools: ToolDef[] = [
       },
       required: ['name'],
     },
+    examples: [
+      {
+        title: 'Personal list view',
+        args: {
+          workspace: 'personal',
+          name: 'MCP Smoke View',
+          icon: 'List',
+          color: '#5e6ad2',
+          shared: false,
+          filterData: { state: { type: { neq: 'completed' } } },
+        },
+      },
+      {
+        title: 'No project filter',
+        args: {
+          workspace: 'personal',
+          name: 'Inbox without project',
+          icon: 'Inbox',
+          color: '#26b5ce',
+          filterData: { project: { null: true } },
+        },
+      },
+    ],
     async handler(args) {
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
@@ -173,7 +202,7 @@ export const viewTools: ToolDef[] = [
   },
   {
     name: 'update_view',
-    description: 'Update a custom view.',
+    description: 'Update a custom view, including filters and visual metadata. Icons accept Linear icon names; colors use hex.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -181,8 +210,8 @@ export const viewTools: ToolDef[] = [
         id: { type: 'string', description: 'Custom view UUID (required)' },
         name: { type: 'string', description: 'New name' },
         description: { type: 'string', description: 'New description' },
-        icon: { type: 'string', description: 'New icon' },
-        color: { type: 'string', description: 'New color hex' },
+        icon: { type: 'string', description: 'New Linear icon name (e.g. "List", "Inbox", "Health")' },
+        color: { type: 'string', description: 'New color hex (e.g. "#5e6ad2")' },
         teamId: { type: 'string', description: 'Scope to team UUID' },
         projectId: { type: 'string', description: 'Scope to project UUID' },
         initiativeId: { type: 'string', description: 'Scope to initiative UUID' },
@@ -255,6 +284,46 @@ PROJECT VIEWS:
       },
       required: ['customViewId', 'preferences'],
     },
+    examples: [
+      {
+        title: 'Personal list defaults',
+        description: 'List layout, no grouping, hide assignee, show status/priority/project/due date.',
+        args: {
+          workspace: 'personal',
+          customViewId: 'custom-view-uuid',
+          type: 'user',
+          preferences: {
+            layout: 'list',
+            issueGrouping: 'noGrouping',
+            viewOrdering: 'priority',
+            viewOrderingDirection: 'ascending',
+            fieldAssignee: false,
+            fieldStatus: true,
+            fieldPriority: true,
+            fieldProject: true,
+            fieldDueDate: true,
+            fieldLabels: true,
+            fieldMilestone: true,
+          },
+        },
+      },
+      {
+        title: 'Grouped by status',
+        args: {
+          workspace: 'personal',
+          customViewId: 'custom-view-uuid',
+          type: 'user',
+          preferences: {
+            layout: 'list',
+            issueGrouping: 'status',
+            showEmptyGroups: false,
+            fieldAssignee: false,
+            fieldStatus: true,
+            fieldPriority: true,
+          },
+        },
+      },
+    ],
     async handler(args) {
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)

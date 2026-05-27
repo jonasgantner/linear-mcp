@@ -4,9 +4,8 @@ Custom Bun/TypeScript MCP server for Linear, backed by raw GraphQL and used thro
 
 - Active local source: `/Users/jonas/.agents/mcp/servers/linear`
 - Workspaces: `biz` and `personal`
-- Tools: 106
 - Auth: `LINEAR_BIZ_TOKEN` and `LINEAR_PERSONAL_TOKEN`
-- Full tool reference: [CAPABILITIES.md](CAPABILITIES.md)
+- Generated tool reference: [CAPABILITIES.md](CAPABILITIES.md)
 
 ## Setup
 
@@ -21,10 +20,14 @@ The local production launch path uses `/Users/jonas/.agents/mcp/wrappers/linear.
 ## Scripts
 
 ```bash
-bun run build
+bun run prepare:repo
+bun run verify
 bun run smoke:tools
+bun run smoke:tools:local
 bun run smoke:views
 ```
+
+Use `bun run prepare:repo` before committing source changes. It refreshes the generated capabilities reference, then runs the normal local verification path. GitHub CI runs docs, build, and credential-free tool discovery; live Linear calls still depend on local credentials and the local MCP wrapper layout.
 
 ## Layout
 

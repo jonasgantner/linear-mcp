@@ -10,20 +10,27 @@ const WORKSPACE_DEFS: [string, string][] = [
 
 let workspaces: LinearWorkspace[] | null = null
 
-export function loadWorkspaces(): LinearWorkspace[] {
-  if (workspaces) return workspaces
-  workspaces = []
+function discoverWorkspaces(): LinearWorkspace[] {
+  const discovered: LinearWorkspace[] = []
   for (const [name, envVar] of WORKSPACE_DEFS) {
     const token = process.env[envVar]
     if (!token) {
-      process.stderr.write(`linear-mcp: missing ${envVar}, skipping workspace "${name}"\n`)
       continue
     }
-    workspaces.push({ name, token })
+    discovered.push({ name, token })
   }
+  return discovered
+}
+
+export function configuredWorkspaceNames(): string[] {
+  return discoverWorkspaces().map(workspace => workspace.name)
+}
+
+export function loadWorkspaces(): LinearWorkspace[] {
+  if (workspaces) return workspaces
+  workspaces = discoverWorkspaces()
   if (workspaces.length === 0) {
-    process.stderr.write('linear-mcp: no workspaces configured\n')
-    process.exit(1)
+    throw new Error('No Linear workspaces configured. Set LINEAR_BIZ_TOKEN and/or LINEAR_PERSONAL_TOKEN.')
   }
   return workspaces
 }

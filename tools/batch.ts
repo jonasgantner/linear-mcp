@@ -74,13 +74,24 @@ export const batchTools: ToolDef[] = [
         assigneeId: { type: 'string', description: 'Assignee user UUID (null to unassign)' },
         dueDate: { type: 'string', description: 'Due date YYYY-MM-DD (null to clear)' },
         cycleId: { type: 'string', description: 'Cycle UUID' },
-        projectId: { type: 'string', description: 'Project UUID' },
-        projectMilestoneId: { type: 'string', description: 'Project milestone UUID' },
+        projectId: { type: 'string', description: 'Project UUID. Set to null through raw JSON to clear if Linear accepts the clear.' },
+        projectMilestoneId: { type: 'string', description: 'Project milestone UUID. Set to null through raw JSON to remove from a milestone if Linear accepts the clear.' },
         addedLabelIds: { type: 'array', items: { type: 'string' }, description: 'Label UUIDs to add' },
         removedLabelIds: { type: 'array', items: { type: 'string' }, description: 'Label UUIDs to remove' },
       },
       required: ['ids'],
     },
+    examples: [
+      {
+        title: 'Bulk move',
+        args: {
+          workspace: 'personal',
+          ids: ['issue-uuid-1', 'issue-uuid-2'],
+          projectId: 'project-uuid',
+          projectMilestoneId: 'milestone-uuid',
+        },
+      },
+    ],
     async handler(args) {
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)

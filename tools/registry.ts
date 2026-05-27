@@ -16,6 +16,7 @@ import { notificationTools } from './notifications.js'
 import { relationTools } from './relations.js'
 import { reactionTools } from './reactions.js'
 import { documentTools } from './documents.js'
+import { favoriteTools } from './favorites.js'
 import { viewTools } from './views.js'
 import { fileTools } from './files.js'
 import { attachmentTools } from './attachments.js'
@@ -50,6 +51,7 @@ const rawToolGroups: ToolGroup[] = [
   { domain: 'issue-relations', sourceFile: 'tools/relations.ts', tools: relationTools },
   { domain: 'reactions', sourceFile: 'tools/reactions.ts', tools: reactionTools },
   { domain: 'documents', sourceFile: 'tools/documents.ts', tools: documentTools },
+  { domain: 'favorites', sourceFile: 'tools/favorites.ts', tools: favoriteTools },
   { domain: 'views', sourceFile: 'tools/views.ts', tools: viewTools },
   { domain: 'files', sourceFile: 'tools/files.ts', tools: fileTools },
   { domain: 'attachments', sourceFile: 'tools/attachments.ts', tools: attachmentTools },
@@ -87,6 +89,7 @@ export function getToolInventory(): Array<{
   domain: ToolDomain | undefined
   sideEffect: ToolSideEffect | undefined
   featureGate: string | undefined
+  examples: ToolDef['examples']
   sourceFile: string | undefined
   inputSchema: Record<string, unknown>
 }> {
@@ -96,6 +99,7 @@ export function getToolInventory(): Array<{
     domain: tool.domain,
     sideEffect: tool.sideEffect,
     featureGate: tool.featureGate,
+    examples: tool.examples,
     sourceFile: tool.sourceFile,
     inputSchema: tool.inputSchema,
   }))

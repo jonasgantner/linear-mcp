@@ -1,6 +1,6 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
-import { loadWorkspaces } from './workspaces.js'
+import { configuredWorkspaceNames } from './workspaces.js'
 import { registerTools } from './tools/registry.js'
 
 process.on('unhandledRejection', err => {
@@ -10,8 +10,12 @@ process.on('uncaughtException', err => {
   process.stderr.write(`linear-mcp: uncaught exception: ${err}\n`)
 })
 
-const workspaces = loadWorkspaces()
-process.stderr.write(`linear-mcp: loaded ${workspaces.length} workspace(s): ${workspaces.map(w => w.name).join(', ')}\n`)
+const configuredWorkspaces = configuredWorkspaceNames()
+if (configuredWorkspaces.length > 0) {
+  process.stderr.write(`linear-mcp: configured workspace(s): ${configuredWorkspaces.join(', ')}\n`)
+} else {
+  process.stderr.write('linear-mcp: no workspace tokens configured; tool discovery is available\n')
+}
 
 const server = new Server(
   { name: 'linear', version: '1.0.0' },

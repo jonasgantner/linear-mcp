@@ -242,8 +242,8 @@ export const issueTools: ToolDef[] = [
         addedLabelIds: { type: 'array', items: { type: 'string' }, description: 'Label UUIDs to add (without replacing existing)' },
         removedLabelIds: { type: 'array', items: { type: 'string' }, description: 'Label UUIDs to remove' },
         cycleId: { type: 'string', description: 'Cycle UUID' },
-        projectId: { type: 'string', description: 'Project UUID' },
-        projectMilestoneId: { type: 'string', description: 'Project milestone UUID' },
+        projectId: { type: 'string', description: 'Project UUID. Set to null through raw JSON to clear if Linear accepts the clear.' },
+        projectMilestoneId: { type: 'string', description: 'Project milestone UUID. Set to null through raw JSON to remove from a milestone if Linear accepts the clear.' },
         estimate: { type: 'number', description: 'Point estimate' },
         dueDate: { type: 'string', description: 'Due date (YYYY-MM-DD)' },
         parentId: { type: 'string', description: 'Parent issue UUID' },
@@ -253,6 +253,26 @@ export const issueTools: ToolDef[] = [
       },
       required: ['id'],
     },
+    examples: [
+      {
+        title: 'Move to project milestone',
+        args: {
+          workspace: 'personal',
+          id: 'issue-uuid',
+          projectId: 'project-uuid',
+          projectMilestoneId: 'milestone-uuid',
+        },
+      },
+      {
+        title: 'Add/remove labels by ID',
+        args: {
+          workspace: 'personal',
+          id: 'issue-uuid',
+          addedLabelIds: ['label-uuid'],
+          removedLabelIds: ['old-label-uuid'],
+        },
+      },
+    ],
     async handler(args) {
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
