@@ -35,6 +35,12 @@ const UPDATE_CYCLE_MUTATION = `
   }
 `
 
+const CYCLE_ARCHIVE_MUTATION = `
+  mutation CycleArchive($id: String!) {
+    cycleArchive(id: $id) { success }
+  }
+`
+
 export const cycleTools: ToolDef[] = [
   {
     name: 'list_cycles',
@@ -125,6 +131,24 @@ export const cycleTools: ToolDef[] = [
       const client = new LinearClient(ws)
       const { workspace: _, id, ...input } = args
       const data = await client.query(UPDATE_CYCLE_MUTATION, { id, input })
+      return JSON.stringify(data, null, 2)
+    },
+  },
+  {
+    name: 'cycle_archive',
+    description: 'Archive a cycle. Linear has no hard-delete for cycles; archiving removes from active views while preserving history. Note: Linear rejects archiving the currently-active cycle.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...WORKSPACE_PROP,
+        id: { type: 'string', description: 'Cycle UUID (required)' },
+      },
+      required: ['id'],
+    },
+    async handler(args) {
+      const ws = resolveWorkspace(args.workspace as string | undefined)
+      const client = new LinearClient(ws)
+      const data = await client.query(CYCLE_ARCHIVE_MUTATION, { id: args.id })
       return JSON.stringify(data, null, 2)
     },
   },

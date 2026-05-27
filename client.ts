@@ -42,9 +42,16 @@ export class LinearClient {
     if (!res.ok) {
       throw new LinearError(res.status, await res.text(), this.workspace.name)
     }
-    const json = (await res.json()) as { data?: T; errors?: Array<{ message: string }> }
+    const json = (await res.json()) as {
+      data?: T
+      errors?: Array<{
+        message: string
+        extensions?: { userPresentableMessage?: string; validationErrors?: unknown }
+      }>
+    }
     if (json.errors?.length) {
-      throw new Error(`GraphQL error on ${this.workspace.name}: ${json.errors.map(e => e.message).join('; ')}`)
+      const details = json.errors.map(e => e.extensions?.userPresentableMessage ?? e.message).join('; ')
+      throw new Error(`GraphQL error on ${this.workspace.name}: ${details}`)
     }
     return json.data as T
   }

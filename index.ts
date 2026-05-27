@@ -10,7 +10,8 @@ process.on('uncaughtException', err => {
   process.stderr.write(`linear-mcp: uncaught exception: ${err}\n`)
 })
 
-loadWorkspaces()
+const workspaces = loadWorkspaces()
+process.stderr.write(`linear-mcp: loaded ${workspaces.length} workspace(s): ${workspaces.map(w => w.name).join(', ')}\n`)
 
 const server = new Server(
   { name: 'linear', version: '1.0.0' },

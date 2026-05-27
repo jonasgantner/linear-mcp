@@ -35,6 +35,12 @@ const CREATE_PROJECT_LABEL_MUTATION = `
   }
 `
 
+const ISSUE_LABEL_RETIRE_MUTATION = `
+  mutation IssueLabelRetire($id: String!) {
+    issueLabelArchive(id: $id) { success }
+  }
+`
+
 export const labelTools: ToolDef[] = [
   {
     name: 'list_labels',
@@ -108,6 +114,24 @@ export const labelTools: ToolDef[] = [
       const client = new LinearClient(ws)
       const { workspace: _, ...input } = args
       const data = await client.query(CREATE_PROJECT_LABEL_MUTATION, { input })
+      return JSON.stringify(data, null, 2)
+    },
+  },
+  {
+    name: 'issue_label_retire',
+    description: 'Retire (soft-delete / archive) an issue label. Linear has no hard-delete for labels; this archives the label so it stops appearing in pickers while preserving historical assignments.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...WORKSPACE_PROP,
+        id: { type: 'string', description: 'Label UUID' },
+      },
+      required: ['id'],
+    },
+    async handler(args) {
+      const ws = resolveWorkspace(args.workspace as string | undefined)
+      const client = new LinearClient(ws)
+      const data = await client.query(ISSUE_LABEL_RETIRE_MUTATION, { id: args.id })
       return JSON.stringify(data, null, 2)
     },
   },

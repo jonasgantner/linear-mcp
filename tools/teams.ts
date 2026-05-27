@@ -8,7 +8,28 @@ const GET_TEAMS_QUERY = `
     teams {
       nodes {
         id name key description
+        cyclesEnabled cycleStartDay cycleDuration cycleCooldownTime
+        cycleIssueAutoAssignStarted cycleIssueAutoAssignCompleted cycleLockToActive
+        upcomingCycleCount cycleCalenderUrl
+        issueEstimationType issueEstimationExtended issueEstimationAllowZero defaultIssueEstimate
+        triageEnabled requirePriorityToLeaveTriage
         members { nodes { id name email active } }
+      }
+    }
+  }
+`
+
+const UPDATE_TEAM_MUTATION = `
+  mutation UpdateTeam($id: String!, $input: TeamUpdateInput!) {
+    teamUpdate(id: $id, input: $input) {
+      success
+      team {
+        id name key
+        cyclesEnabled cycleStartDay cycleDuration cycleCooldownTime
+        cycleIssueAutoAssignStarted cycleIssueAutoAssignCompleted cycleLockToActive
+        upcomingCycleCount
+        issueEstimationType issueEstimationExtended issueEstimationAllowZero defaultIssueEstimate
+        triageEnabled requirePriorityToLeaveTriage
       }
     }
   }
@@ -70,6 +91,42 @@ export const teamTools: ToolDef[] = [
       }
 
       return JSON.stringify({ teams: { nodes: enriched } }, null, 2)
+    },
+  },
+  {
+    name: 'update_team',
+    description: 'Update team settings: cycle config (start day, duration, auto-assign), estimate config (type, extended, allow zero, default), triage. issueEstimationType accepts: notUsed, exponential, fibonacci, linear, tShirt. defaultIssueEstimate is API-capped to 0 or 1.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...WORKSPACE_PROP,
+        id: { type: 'string', description: 'Team UUID (required)' },
+        name: { type: 'string', description: 'Team name' },
+        key: { type: 'string', description: 'Team key (e.g. "SPE")' },
+        description: { type: 'string', description: 'Team description' },
+        cyclesEnabled: { type: 'boolean', description: 'Enable cycles for this team' },
+        cycleStartDay: { type: 'number', description: 'Day of week cycles start (0=Sun, 1=Mon, ...)' },
+        cycleDuration: { type: 'integer', description: 'Cycle length in weeks' },
+        cycleCooldownTime: { type: 'integer', description: 'Cooldown days between cycles' },
+        cycleIssueAutoAssignStarted: { type: 'boolean', description: 'Auto-assign in-progress issues to active cycle' },
+        cycleIssueAutoAssignCompleted: { type: 'boolean', description: 'Keep completed issues assigned to their cycle' },
+        cycleLockToActive: { type: 'boolean', description: 'Restrict issue movement to active cycle only' },
+        upcomingCycleCount: { type: 'number', description: 'Number of future cycles to pre-create' },
+        issueEstimationType: { type: 'string', description: 'Scale: notUsed | exponential | fibonacci | linear | tShirt' },
+        issueEstimationExtended: { type: 'boolean', description: 'Extend scale with higher values (e.g. fibonacci adds 13, 21)' },
+        issueEstimationAllowZero: { type: 'boolean', description: 'Allow 0-point estimates (signal-only / blocked)' },
+        defaultIssueEstimate: { type: 'number', description: 'Default estimate on new issues. API caps to 0 or 1.' },
+        triageEnabled: { type: 'boolean', description: 'Enable Triage queue' },
+        requirePriorityToLeaveTriage: { type: 'boolean', description: 'Require priority set before leaving Triage' },
+      },
+      required: ['id'],
+    },
+    async handler(args) {
+      const ws = resolveWorkspace(args.workspace as string | undefined)
+      const client = new LinearClient(ws)
+      const { workspace: _, id, ...input } = args
+      const data = await client.query(UPDATE_TEAM_MUTATION, { id, input })
+      return JSON.stringify(data, null, 2)
     },
   },
 ]

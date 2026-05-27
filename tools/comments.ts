@@ -2,12 +2,19 @@ import type { ToolDef } from './_types.js'
 import { WORKSPACE_PROP } from './_types.js'
 import { resolveWorkspace } from '../workspaces.js'
 import { LinearClient } from '../client.js'
+import { COMMENT_TARGET_PROPS, buildCommentCreateInput } from './commentTargets.js'
+import { prepareInlineAnchor } from './inlineAnchors.js'
 
 const CREATE_COMMENT_MUTATION = `
   mutation CreateComment($input: CommentCreateInput!) {
     commentCreate(input: $input) {
       success
-      comment { id body user { name } createdAt }
+      comment {
+        id body quotedText url
+        issueId projectId initiativeId documentContentId projectUpdateId initiativeUpdateId parentId
+        user { name }
+        createdAt
+      }
     }
   }
 `
@@ -48,25 +55,29 @@ const UNRESOLVE_COMMENT_MUTATION = `
 export const commentTools: ToolDef[] = [
   {
     name: 'create_comment',
-    description: 'Add a comment to an issue, project update, or initiative update. Provide exactly one target ID. Use parentId to reply to an existing comment.',
+    description: 'Add a comment to an issue, project, initiative, document content, project update, initiative update, or post. Provide exactly one target. Use parentId to reply; use quotedText with issueDescriptionId/documentId to create a real inline source anchor.',
     inputSchema: {
       type: 'object',
       properties: {
         ...WORKSPACE_PROP,
         body: { type: 'string', description: 'Comment body (markdown) (required)' },
-        issueId: { type: 'string', description: 'Issue UUID or identifier (comment on issue)' },
-        projectUpdateId: { type: 'string', description: 'Project update UUID (reply to project update)' },
-        initiativeUpdateId: { type: 'string', description: 'Initiative update UUID (reply to initiative update)' },
+        ...COMMENT_TARGET_PROPS,
         parentId: { type: 'string', description: 'Parent comment UUID (threaded reply)' },
+        quotedText: { type: 'string', description: 'Exact selected text for inline comments. For GUI highlights, use issueDescriptionId or documentId.' },
+        bodyData: { type: 'object', description: 'Optional Linear rich-text bodyData JSON. Omit for normal markdown body.' },
       },
       required: ['body'],
     },
     async handler(args) {
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
-      const { workspace: _, ...input } = args
+      const input = await buildCommentCreateInput(client, args, args.body as string)
+      const inlineAnchor = await prepareInlineAnchor(client, args)
+      if (inlineAnchor) input.id = inlineAnchor.commentId
       const data = await client.query(CREATE_COMMENT_MUTATION, { input })
-      return JSON.stringify(data, null, 2)
+      if (!inlineAnchor) return JSON.stringify(data, null, 2)
+      const anchorResult = await inlineAnchor.apply()
+      return JSON.stringify({ ...(data as object), inlineAnchor: { target: inlineAnchor.target, result: anchorResult } }, null, 2)
     },
   },
   {

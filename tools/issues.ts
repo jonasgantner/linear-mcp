@@ -5,7 +5,8 @@ import { LinearClient } from '../client.js'
 
 const ISSUE_FIELDS = `
   id identifier title description url priority priorityLabel estimate
-  dueDate slaBreachesAt
+  dueDate slaBreachesAt snoozedUntilAt
+  snoozedBy { id name }
   state { id name type color }
   assignee { id name email }
   team { id name key }
@@ -30,11 +31,35 @@ const GET_ISSUE_QUERY = `
   query GetIssue($id: String!) {
     issue(id: $id) {
       ${ISSUE_FIELDS}
+      descriptionState
+      documentContent { id contentState updatedAt }
       children { nodes { id identifier title state { name } priority } }
       attachments { nodes { id title subtitle url sourceType metadata createdAt } }
-      comments { nodes { id body user { name } createdAt updatedAt resolvedAt parent { id } children { nodes { id body user { name } createdAt } } } }
+      comments {
+        nodes {
+          id body quotedText url
+          issueId projectId initiativeId documentContentId projectUpdateId initiativeUpdateId parentId
+          user { name }
+          createdAt updatedAt resolvedAt
+          parent { id }
+          children { nodes { id body quotedText user { name } createdAt } }
+        }
+      }
       relations { nodes { id type relatedIssue { id identifier title } } }
       inverseRelations { nodes { id type issue { id identifier title } } }
+    }
+  }
+`
+
+const GET_DOCUMENT_CONTENT_COMMENTS_QUERY = `
+  query GetDocumentContentComments($documentContentId: ID!) {
+    comments(filter: { documentContent: { id: { eq: $documentContentId } } }, first: 50) {
+      nodes {
+        id body quotedText url
+        issueId projectId initiativeId documentContentId projectUpdateId initiativeUpdateId parentId
+        user { name }
+        createdAt updatedAt resolvedAt
+      }
     }
   }
 `
@@ -52,7 +77,13 @@ const UPDATE_ISSUE_MUTATION = `
   mutation UpdateIssue($id: String!, $input: IssueUpdateInput!) {
     issueUpdate(id: $id, input: $input) {
       success
-      issue { id identifier title url state { name } assignee { name } priority }
+      issue {
+        id identifier title url priority
+        state { name }
+        assignee { name }
+        snoozedUntilAt snoozedBy { id name }
+        dueDate estimate
+      }
     }
   }
 `
@@ -60,6 +91,14 @@ const UPDATE_ISSUE_MUTATION = `
 const DELETE_ISSUE_MUTATION = `
   mutation DeleteIssue($id: String!) {
     issueDelete(id: $id) { success }
+  }
+`
+
+const ISSUE_REMINDER_MUTATION = `
+  mutation IssueReminder($id: String!, $reminderAt: DateTime!) {
+    issueReminder(id: $id, reminderAt: $reminderAt) {
+      success lastSyncId
+    }
   }
 `
 
@@ -145,7 +184,14 @@ export const issueTools: ToolDef[] = [
     async handler(args) {
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
-      const data = await client.query(GET_ISSUE_QUERY, { id: args.id })
+      const data = await client.query<{
+        issue: { documentContent?: { id: string } | null; documentContentComments?: unknown }
+      }>(GET_ISSUE_QUERY, { id: args.id })
+      const documentContentId = data.issue.documentContent?.id
+      if (documentContentId) {
+        const comments = await client.query(GET_DOCUMENT_CONTENT_COMMENTS_QUERY, { documentContentId })
+        data.issue.documentContentComments = (comments as { comments: unknown }).comments
+      }
       return JSON.stringify(data, null, 2)
     },
   },
@@ -202,6 +248,8 @@ export const issueTools: ToolDef[] = [
         dueDate: { type: 'string', description: 'Due date (YYYY-MM-DD)' },
         parentId: { type: 'string', description: 'Parent issue UUID' },
         teamId: { type: 'string', description: 'Team UUID (move issue to different team)' },
+        snoozedUntilAt: { type: 'string', description: 'Snooze the issue until this datetime (ISO 8601). Set to null to unsnooze. Hides from default views; surfaces again via showSnoozedItems view preference.' },
+        snoozedById: { type: 'string', description: 'User UUID who snoozed the issue (server normally sets this to the actor automatically)' },
       },
       required: ['id'],
     },
@@ -210,6 +258,25 @@ export const issueTools: ToolDef[] = [
       const client = new LinearClient(ws)
       const { workspace: _, id, ...input } = args
       const data = await client.query(UPDATE_ISSUE_MUTATION, { id, input })
+      return JSON.stringify(data, null, 2)
+    },
+  },
+  {
+    name: 'issue_reminder',
+    description: 'Set a personal reminder on an issue. Fires as an inbox notification at `reminderAt` (type: issueReminder). Works on any issue regardless of state, but archived issues do NOT fire reminders. Calling again on the same issue overrides the prior reminder.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...WORKSPACE_PROP,
+        id: { type: 'string', description: 'Issue UUID or identifier (e.g. "J-297")' },
+        reminderAt: { type: 'string', description: 'When to fire the reminder, ISO 8601 datetime (e.g. "2026-05-17T09:00:00.000Z")' },
+      },
+      required: ['id', 'reminderAt'],
+    },
+    async handler(args) {
+      const ws = resolveWorkspace(args.workspace as string | undefined)
+      const client = new LinearClient(ws)
+      const data = await client.query(ISSUE_REMINDER_MUTATION, { id: args.id, reminderAt: args.reminderAt })
       return JSON.stringify(data, null, 2)
     },
   },

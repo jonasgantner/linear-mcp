@@ -11,10 +11,20 @@ const LIST_VIEWS_QUERY = `
         id name description icon color shared
         owner { id name }
         team { id name key }
-        project { id name }
-        initiative { id name }
+        projects { nodes { id name } }
+        initiatives { nodes { id name } }
         filterData
         projectFilterData
+        initiativeFilterData
+        feedItemFilterData
+        userViewPreferences {
+          id type viewType
+          preferences { layout projectLayout issueGrouping projectGrouping viewOrdering projectViewOrdering }
+        }
+        organizationViewPreferences {
+          id type viewType
+          preferences { layout projectLayout issueGrouping projectGrouping viewOrdering projectViewOrdering }
+        }
         createdAt updatedAt
       }
     }
@@ -27,10 +37,20 @@ const GET_VIEW_QUERY = `
       id name description icon color shared
       owner { id name }
       team { id name key }
-      project { id name }
-      initiative { id name }
+      projects { nodes { id name } }
+      initiatives { nodes { id name } }
       filterData
       projectFilterData
+      initiativeFilterData
+      feedItemFilterData
+      userViewPreferences {
+        id type viewType
+        preferences { layout projectLayout issueGrouping projectGrouping viewOrdering projectViewOrdering }
+      }
+      organizationViewPreferences {
+        id type viewType
+        preferences { layout projectLayout issueGrouping projectGrouping viewOrdering projectViewOrdering }
+      }
       createdAt updatedAt
     }
   }
@@ -40,7 +60,7 @@ const CREATE_VIEW_MUTATION = `
   mutation CreateCustomView($input: CustomViewCreateInput!) {
     customViewCreate(input: $input) {
       success
-      customView { id name description icon color shared filterData projectFilterData }
+      customView { id name description icon color shared filterData projectFilterData initiativeFilterData feedItemFilterData }
     }
   }
 `
@@ -49,7 +69,7 @@ const UPDATE_VIEW_MUTATION = `
   mutation UpdateCustomView($id: String!, $input: CustomViewUpdateInput!) {
     customViewUpdate(id: $id, input: $input) {
       success
-      customView { id name description icon color shared filterData projectFilterData }
+      customView { id name description icon color shared filterData projectFilterData initiativeFilterData feedItemFilterData }
     }
   }
 `
@@ -126,6 +146,7 @@ export const viewTools: ToolDef[] = [
       type: 'object',
       properties: {
         ...WORKSPACE_PROP,
+        id: { type: 'string', description: 'Optional client-generated custom view UUID' },
         name: { type: 'string', description: 'View name (required)' },
         description: { type: 'string', description: 'View description' },
         icon: { type: 'string', description: 'Icon (:emoji_name: format)' },
@@ -133,9 +154,12 @@ export const viewTools: ToolDef[] = [
         teamId: { type: 'string', description: 'Scope to team UUID' },
         projectId: { type: 'string', description: 'Scope to project UUID' },
         initiativeId: { type: 'string', description: 'Scope to initiative UUID' },
+        ownerId: { type: 'string', description: 'Owner user UUID' },
         shared: { type: 'boolean', description: 'Share with workspace (default: false)' },
         filterData: { type: 'object', description: 'IssueFilter object (e.g. { state: { name: { eq: "In Progress" } }, assignee: { isMe: { eq: true } } })' },
         projectFilterData: { type: 'object', description: 'ProjectFilter object for project views' },
+        initiativeFilterData: { type: 'object', description: 'InitiativeFilter object for initiative views' },
+        feedItemFilterData: { type: 'object', description: 'FeedItemFilter object for feed/update views' },
       },
       required: ['name'],
     },
@@ -159,9 +183,15 @@ export const viewTools: ToolDef[] = [
         description: { type: 'string', description: 'New description' },
         icon: { type: 'string', description: 'New icon' },
         color: { type: 'string', description: 'New color hex' },
+        teamId: { type: 'string', description: 'Scope to team UUID' },
+        projectId: { type: 'string', description: 'Scope to project UUID' },
+        initiativeId: { type: 'string', description: 'Scope to initiative UUID' },
+        ownerId: { type: 'string', description: 'Owner user UUID' },
         shared: { type: 'boolean', description: 'Share with workspace' },
         filterData: { type: 'object', description: 'New IssueFilter object' },
         projectFilterData: { type: 'object', description: 'New ProjectFilter object' },
+        initiativeFilterData: { type: 'object', description: 'New InitiativeFilter object' },
+        feedItemFilterData: { type: 'object', description: 'New FeedItemFilter object' },
       },
       required: ['id'],
     },

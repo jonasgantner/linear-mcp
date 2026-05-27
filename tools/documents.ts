@@ -8,7 +8,7 @@ const CREATE_DOCUMENT_MUTATION = `
     documentCreate(input: $input) {
       success
       document {
-        id title icon color url
+        id title icon color url documentContentId contentState
         project { id name }
         initiative { id name }
       }
@@ -20,7 +20,26 @@ const UPDATE_DOCUMENT_MUTATION = `
   mutation UpdateDocument($id: String!, $input: DocumentUpdateInput!) {
     documentUpdate(id: $id, input: $input) {
       success
-      document { id title icon color url }
+      document { id title icon color url documentContentId contentState }
+    }
+  }
+`
+
+const GET_DOCUMENT_QUERY = `
+  query GetDocument($id: String!) {
+    document(id: $id) {
+      id title icon color url content documentContentId contentState
+      project { id name }
+      initiative { id name }
+      creator { name }
+      comments {
+        nodes {
+          id body quotedText url documentContentId parentId
+          user { name }
+          createdAt updatedAt resolvedAt
+        }
+      }
+      createdAt updatedAt
     }
   }
 `
@@ -30,7 +49,7 @@ const SEARCH_DOCUMENTS_QUERY = `
     documents(filter: $filter, first: $first, after: $after) {
       pageInfo { hasNextPage endCursor }
       nodes {
-        id title icon color url
+        id title icon color url documentContentId
         project { id name }
         initiative { id name }
         creator { name }
@@ -92,6 +111,24 @@ export const documentTools: ToolDef[] = [
       const client = new LinearClient(ws)
       const { workspace: _, id, ...input } = args
       const data = await client.query(UPDATE_DOCUMENT_MUTATION, { id, input })
+      return JSON.stringify(data, null, 2)
+    },
+  },
+  {
+    name: 'get_document',
+    description: 'Get a document by UUID, including full markdown content.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...WORKSPACE_PROP,
+        id: { type: 'string', description: 'Document UUID (required)' },
+      },
+      required: ['id'],
+    },
+    async handler(args) {
+      const ws = resolveWorkspace(args.workspace as string | undefined)
+      const client = new LinearClient(ws)
+      const data = await client.query(GET_DOCUMENT_QUERY, { id: args.id })
       return JSON.stringify(data, null, 2)
     },
   },
