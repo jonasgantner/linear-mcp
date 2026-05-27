@@ -20,13 +20,6 @@ const INITIATIVE_UPDATE_FIELDS = `
   id body health url archivedAt createdAt updatedAt user { id name }
 `
 
-const INITIATIVE_RELATION_FIELDS = `
-  id sortOrder archivedAt createdAt updatedAt
-  initiative { id name status }
-  relatedInitiative { id name status }
-  user { id name }
-`
-
 const LIST_INITIATIVES_QUERY = `
   query ListInitiatives($first: Int, $after: String) {
     initiatives(first: $first, after: $after) {
@@ -49,7 +42,6 @@ const GET_INITIATIVE_QUERY = `
       documentContent { id }
       projects { nodes { id name state progress status { id name type color } } }
       initiativeUpdates { nodes { ${INITIATIVE_UPDATE_FIELDS} } }
-      relations { nodes { ${INITIATIVE_RELATION_FIELDS} } }
     }
   }
 `
@@ -178,42 +170,6 @@ const UNARCHIVE_INITIATIVE_UPDATE_MUTATION = `
       success
       entity { ${INITIATIVE_UPDATE_FIELDS} }
     }
-  }
-`
-
-const CREATE_INITIATIVE_RELATION_MUTATION = `
-  mutation CreateInitiativeRelation($input: InitiativeRelationCreateInput!) {
-    initiativeRelationCreate(input: $input) {
-      success
-      initiativeRelation { ${INITIATIVE_RELATION_FIELDS} }
-    }
-  }
-`
-
-const UPDATE_INITIATIVE_RELATION_MUTATION = `
-  mutation UpdateInitiativeRelation($id: String!, $input: InitiativeRelationUpdateInput!) {
-    initiativeRelationUpdate(id: $id, input: $input) {
-      success
-      initiativeRelation { ${INITIATIVE_RELATION_FIELDS} }
-    }
-  }
-`
-
-const DELETE_INITIATIVE_RELATION_MUTATION = `
-  mutation DeleteInitiativeRelation($id: String!) {
-    initiativeRelationDelete(id: $id) { success }
-  }
-`
-
-const ADD_INITIATIVE_LABEL_MUTATION = `
-  mutation AddInitiativeLabel($id: String!, $labelId: String!) {
-    initiativeAddLabel(id: $id, labelId: $labelId) { success }
-  }
-`
-
-const REMOVE_INITIATIVE_LABEL_MUTATION = `
-  mutation RemoveInitiativeLabel($id: String!, $labelId: String!) {
-    initiativeRemoveLabel(id: $id, labelId: $labelId) { success }
   }
 `
 
@@ -358,9 +314,8 @@ export const initiativeTools: ToolDef[] = [
         color: { type: 'string', description: 'Color hex (e.g. "#5e6ad2")' },
         icon: { type: 'string', description: 'Initiative icon. Linear accepts icon names such as "MagicWand" in current smoke coverage.' },
         targetDate: { type: 'string', description: 'Target date (YYYY-MM-DD)' },
-        targetDateResolution: { type: 'string', description: 'Date resolution for targetDate (e.g. day, month, quarter, year)' },
+        targetDateResolution: { type: 'string', description: 'Date resolution for targetDate: month, quarter, halfYear, or year' },
         sortOrder: { type: 'number', description: 'Manual sort order' },
-        labelIds: { type: 'array', items: { type: 'string' }, description: 'Initiative label UUIDs' },
       },
       required: ['name'],
     },
@@ -400,9 +355,8 @@ export const initiativeTools: ToolDef[] = [
         color: { type: 'string', description: 'Color hex' },
         icon: { type: 'string', description: 'Initiative icon. Linear accepts icon names such as "MagicWand" in current smoke coverage.' },
         targetDate: { type: 'string', description: 'Target date (YYYY-MM-DD)' },
-        targetDateResolution: { type: 'string', description: 'Date resolution for targetDate (e.g. day, month, quarter, year)' },
+        targetDateResolution: { type: 'string', description: 'Date resolution for targetDate: month, quarter, halfYear, or year' },
         sortOrder: { type: 'number', description: 'Manual sort order' },
-        labelIds: { type: 'array', items: { type: 'string' }, description: 'Initiative label UUIDs' },
         updateReminderFrequencyInWeeks: { type: 'number', description: 'Legacy reminder frequency in weeks' },
         updateReminderFrequency: { type: 'number', description: 'Reminder frequency value' },
         frequencyResolution: { type: 'string', description: 'Reminder frequency resolution' },
@@ -618,104 +572,6 @@ export const initiativeTools: ToolDef[] = [
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
       const data = await client.query(UNARCHIVE_INITIATIVE_UPDATE_MUTATION, { id: args.id })
-      return JSON.stringify(data, null, 2)
-    },
-  },
-  {
-    name: 'create_initiative_relation',
-    description: 'Create an initiative relation/sub-initiative link. This may be Enterprise-gated in Linear.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        ...WORKSPACE_PROP,
-        id: { type: 'string', description: 'Optional client-generated initiative relation UUID' },
-        initiativeId: { type: 'string', description: 'Parent/source initiative UUID' },
-        relatedInitiativeId: { type: 'string', description: 'Related/sub initiative UUID' },
-        sortOrder: { type: 'number', description: 'Manual sort order' },
-      },
-      required: ['initiativeId', 'relatedInitiativeId'],
-    },
-    async handler(args) {
-      const ws = resolveWorkspace(args.workspace as string | undefined)
-      const client = new LinearClient(ws)
-      const { workspace: _, ...input } = args
-      const data = await client.query(CREATE_INITIATIVE_RELATION_MUTATION, { input })
-      return JSON.stringify(data, null, 2)
-    },
-  },
-  {
-    name: 'update_initiative_relation',
-    description: 'Update an initiative relation sort order. This may be Enterprise-gated in Linear.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        ...WORKSPACE_PROP,
-        id: { type: 'string', description: 'Initiative relation UUID' },
-        sortOrder: { type: 'number', description: 'Manual sort order' },
-      },
-      required: ['id'],
-    },
-    async handler(args) {
-      const ws = resolveWorkspace(args.workspace as string | undefined)
-      const client = new LinearClient(ws)
-      const { workspace: _, id, ...input } = args
-      const data = await client.query(UPDATE_INITIATIVE_RELATION_MUTATION, { id, input })
-      return JSON.stringify(data, null, 2)
-    },
-  },
-  {
-    name: 'delete_initiative_relation',
-    description: 'Delete an initiative relation. This may be Enterprise-gated in Linear.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        ...WORKSPACE_PROP,
-        id: { type: 'string', description: 'Initiative relation UUID' },
-      },
-      required: ['id'],
-    },
-    async handler(args) {
-      const ws = resolveWorkspace(args.workspace as string | undefined)
-      const client = new LinearClient(ws)
-      const data = await client.query(DELETE_INITIATIVE_RELATION_MUTATION, { id: args.id })
-      return JSON.stringify(data, null, 2)
-    },
-  },
-  {
-    name: 'add_initiative_label',
-    description: 'Attach an initiative label to an initiative. This may be feature-gated in Linear.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        ...WORKSPACE_PROP,
-        id: { type: 'string', description: 'Initiative UUID' },
-        labelId: { type: 'string', description: 'Initiative label UUID' },
-      },
-      required: ['id', 'labelId'],
-    },
-    async handler(args) {
-      const ws = resolveWorkspace(args.workspace as string | undefined)
-      const client = new LinearClient(ws)
-      const data = await client.query(ADD_INITIATIVE_LABEL_MUTATION, { id: args.id, labelId: args.labelId })
-      return JSON.stringify(data, null, 2)
-    },
-  },
-  {
-    name: 'remove_initiative_label',
-    description: 'Remove an initiative label from an initiative. This may be feature-gated in Linear.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        ...WORKSPACE_PROP,
-        id: { type: 'string', description: 'Initiative UUID' },
-        labelId: { type: 'string', description: 'Initiative label UUID' },
-      },
-      required: ['id', 'labelId'],
-    },
-    async handler(args) {
-      const ws = resolveWorkspace(args.workspace as string | undefined)
-      const client = new LinearClient(ws)
-      const data = await client.query(REMOVE_INITIATIVE_LABEL_MUTATION, { id: args.id, labelId: args.labelId })
       return JSON.stringify(data, null, 2)
     },
   },

@@ -2,6 +2,7 @@ import type { ToolDef } from './_types.js'
 import { WORKSPACE_PROP, PAGINATION_PROPS } from './_types.js'
 import { resolveWorkspace } from '../workspaces.js'
 import { LinearClient } from '../client.js'
+import { COMMENT_READ_FIELDS } from './commentRead.js'
 
 const ISSUE_FIELDS = `
   id identifier title description url priority priorityLabel estimate
@@ -18,6 +19,13 @@ const ISSUE_FIELDS = `
   createdAt updatedAt completedAt canceledAt
 `
 
+const ISSUE_SUBSCRIBER_FIELDS = `
+  subscribers(first: 250) {
+    pageInfo { hasNextPage endCursor }
+    nodes { id name email active }
+  }
+`
+
 const SEARCH_ISSUES_QUERY = `
   query SearchIssues($filter: IssueFilter, $first: Int, $after: String, $orderBy: PaginationOrderBy) {
     issues(filter: $filter, first: $first, after: $after, orderBy: $orderBy) {
@@ -31,34 +39,32 @@ const GET_ISSUE_QUERY = `
   query GetIssue($id: String!) {
     issue(id: $id) {
       ${ISSUE_FIELDS}
+      ${ISSUE_SUBSCRIBER_FIELDS}
       descriptionState
       documentContent { id contentState updatedAt }
       children { nodes { id identifier title state { name } priority } }
       attachments { nodes { id title subtitle url sourceType metadata createdAt } }
-      comments {
-        nodes {
-          id body quotedText url
-          issueId projectId initiativeId documentContentId projectUpdateId initiativeUpdateId parentId
-          user { name }
-          createdAt updatedAt resolvedAt
-          parent { id }
-          children { nodes { id body quotedText user { name } createdAt } }
-        }
-      }
       relations { nodes { id type relatedIssue { id identifier title } } }
       inverseRelations { nodes { id type issue { id identifier title } } }
     }
   }
 `
 
+const GET_ISSUE_COMMENTS_QUERY = `
+  query GetIssueComments($issueId: ID!) {
+    comments(filter: { issue: { id: { eq: $issueId } } }, first: 25) {
+      nodes {
+        ${COMMENT_READ_FIELDS}
+      }
+    }
+  }
+`
+
 const GET_DOCUMENT_CONTENT_COMMENTS_QUERY = `
   query GetDocumentContentComments($documentContentId: ID!) {
-    comments(filter: { documentContent: { id: { eq: $documentContentId } } }, first: 50) {
+    comments(filter: { documentContent: { id: { eq: $documentContentId } } }, first: 25) {
       nodes {
-        id body quotedText url
-        issueId projectId initiativeId documentContentId projectUpdateId initiativeUpdateId parentId
-        user { name }
-        createdAt updatedAt resolvedAt
+        ${COMMENT_READ_FIELDS}
       }
     }
   }
@@ -68,7 +74,10 @@ const CREATE_ISSUE_MUTATION = `
   mutation CreateIssue($input: IssueCreateInput!) {
     issueCreate(input: $input) {
       success
-      issue { id identifier title url team { key } state { name } assignee { name } }
+      issue {
+        ${ISSUE_FIELDS}
+        ${ISSUE_SUBSCRIBER_FIELDS}
+      }
     }
   }
 `
@@ -78,13 +87,28 @@ const UPDATE_ISSUE_MUTATION = `
     issueUpdate(id: $id, input: $input) {
       success
       issue {
-        id identifier title url priority
-        state { name }
-        assignee { name }
-        snoozedUntilAt snoozedBy { id name }
-        dueDate estimate
+        ${ISSUE_FIELDS}
+        ${ISSUE_SUBSCRIBER_FIELDS}
       }
     }
+  }
+`
+
+const ISSUE_SUBSCRIBERS_QUERY = `
+  query IssueSubscribers($id: String!, $first: Int, $after: String) {
+    issue(id: $id) {
+      id identifier title
+      subscribers(first: $first, after: $after) {
+        pageInfo { hasNextPage endCursor }
+        nodes { id name email active }
+      }
+    }
+  }
+`
+
+const VIEWER_QUERY = `
+  query Viewer {
+    viewer { id name email active }
   }
 `
 
@@ -113,6 +137,19 @@ const UNARCHIVE_ISSUE_MUTATION = `
     issueUnarchive(id: $id) { success }
   }
 `
+
+async function resolveSubscriberUserId(client: LinearClient, userId: unknown): Promise<string> {
+  if (typeof userId === 'string' && userId) return userId
+  const data = await client.query<{ viewer: { id: string } }>(VIEWER_QUERY)
+  return data.viewer.id
+}
+
+async function getIssueSubscriberIds(client: LinearClient, issueId: unknown): Promise<string[]> {
+  const data = await client.query<{
+    issue: { subscribers: { nodes: Array<{ id: string }> } }
+  }>(ISSUE_SUBSCRIBERS_QUERY, { id: issueId, first: 250 })
+  return data.issue.subscribers.nodes.map(user => user.id)
+}
 
 function buildIssueFilter(args: Record<string, unknown>): Record<string, unknown> {
   if (args.filter) return args.filter as Record<string, unknown>
@@ -185,8 +222,10 @@ export const issueTools: ToolDef[] = [
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
       const data = await client.query<{
-        issue: { documentContent?: { id: string } | null; documentContentComments?: unknown }
+        issue: { id: string; comments?: unknown; documentContent?: { id: string } | null; documentContentComments?: unknown }
       }>(GET_ISSUE_QUERY, { id: args.id })
+      const issueComments = await client.query(GET_ISSUE_COMMENTS_QUERY, { issueId: data.issue.id })
+      data.issue.comments = (issueComments as { comments: unknown }).comments
       const documentContentId = data.issue.documentContent?.id
       if (documentContentId) {
         const comments = await client.query(GET_DOCUMENT_CONTENT_COMMENTS_QUERY, { documentContentId })
@@ -197,7 +236,7 @@ export const issueTools: ToolDef[] = [
   },
   {
     name: 'create_issue',
-    description: 'Create a new issue. Requires teamId and title at minimum.',
+    description: 'Create a new issue. Requires teamId and title at minimum. Supports the same routine organization fields as update_issue, including projectMilestoneId and subscriberIds.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -211,9 +250,11 @@ export const issueTools: ToolDef[] = [
         labelIds: { type: 'array', items: { type: 'string' }, description: 'Label UUIDs' },
         cycleId: { type: 'string', description: 'Cycle UUID' },
         projectId: { type: 'string', description: 'Project UUID' },
+        projectMilestoneId: { type: 'string', description: 'Project milestone UUID' },
         estimate: { type: 'number', description: 'Point estimate' },
         dueDate: { type: 'string', description: 'Due date (YYYY-MM-DD)' },
         parentId: { type: 'string', description: 'Parent issue UUID for sub-issues' },
+        subscriberIds: { type: 'array', items: { type: 'string' }, description: 'Subscriber/watcher user UUIDs' },
       },
       required: ['teamId', 'title'],
     },
@@ -227,7 +268,7 @@ export const issueTools: ToolDef[] = [
   },
   {
     name: 'update_issue',
-    description: 'Update an existing issue. Pass the issue ID and any fields to change.',
+    description: 'Update an existing issue. Pass the issue ID and any fields to change. Nullable fields that Linear accepts can be cleared with raw JSON null: assigneeId, cycleId, projectId, projectMilestoneId, parentId, dueDate, estimate, and snoozedUntilAt.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -237,18 +278,19 @@ export const issueTools: ToolDef[] = [
         description: { type: 'string', description: 'New description (markdown)' },
         priority: { type: 'integer', description: '0=none, 1=urgent, 2=high, 3=medium, 4=low' },
         stateId: { type: 'string', description: 'New workflow state UUID' },
-        assigneeId: { type: 'string', description: 'New assignee user UUID' },
+        assigneeId: { type: ['string', 'null'], description: 'New assignee user UUID, or null to unassign' },
         labelIds: { type: 'array', items: { type: 'string' }, description: 'Label UUIDs (replaces all)' },
         addedLabelIds: { type: 'array', items: { type: 'string' }, description: 'Label UUIDs to add (without replacing existing)' },
         removedLabelIds: { type: 'array', items: { type: 'string' }, description: 'Label UUIDs to remove' },
-        cycleId: { type: 'string', description: 'Cycle UUID' },
-        projectId: { type: 'string', description: 'Project UUID. Set to null through raw JSON to clear if Linear accepts the clear.' },
-        projectMilestoneId: { type: 'string', description: 'Project milestone UUID. Set to null through raw JSON to remove from a milestone if Linear accepts the clear.' },
-        estimate: { type: 'number', description: 'Point estimate' },
-        dueDate: { type: 'string', description: 'Due date (YYYY-MM-DD)' },
-        parentId: { type: 'string', description: 'Parent issue UUID' },
+        cycleId: { type: ['string', 'null'], description: 'Cycle UUID, or null to remove from cycle' },
+        projectId: { type: ['string', 'null'], description: 'Project UUID to move the issue between projects, or null to clear project' },
+        projectMilestoneId: { type: ['string', 'null'], description: 'Project milestone UUID, or null to remove from milestone' },
+        estimate: { type: ['number', 'null'], description: 'Point estimate, or null to clear estimate' },
+        dueDate: { type: ['string', 'null'], description: 'Due date (YYYY-MM-DD), or null to clear due date' },
+        parentId: { type: ['string', 'null'], description: 'Parent issue UUID, or null to detach from parent' },
         teamId: { type: 'string', description: 'Team UUID (move issue to different team)' },
-        snoozedUntilAt: { type: 'string', description: 'Snooze the issue until this datetime (ISO 8601). Set to null to unsnooze. Hides from default views; surfaces again via showSnoozedItems view preference.' },
+        subscriberIds: { type: 'array', items: { type: 'string' }, description: 'Subscriber/watcher user UUIDs (replaces all subscribers). Prefer subscribe_issue/unsubscribe_issue for additive changes.' },
+        snoozedUntilAt: { type: ['string', 'null'], description: 'Snooze the issue until this datetime (ISO 8601). Set to null to unsnooze. Hides from default views; surfaces again via showSnoozedItems view preference.' },
         snoozedById: { type: 'string', description: 'User UUID who snoozed the issue (server normally sets this to the actor automatically)' },
       },
       required: ['id'],
@@ -261,6 +303,22 @@ export const issueTools: ToolDef[] = [
           id: 'issue-uuid',
           projectId: 'project-uuid',
           projectMilestoneId: 'milestone-uuid',
+        },
+      },
+      {
+        title: 'Clear organization fields',
+        description: 'Use JSON null to clear nullable issue fields that Linear supports.',
+        args: {
+          workspace: 'personal',
+          id: 'issue-uuid',
+          assigneeId: null,
+          projectId: null,
+          projectMilestoneId: null,
+          cycleId: null,
+          parentId: null,
+          dueDate: null,
+          estimate: null,
+          snoozedUntilAt: null,
         },
       },
       {
@@ -278,6 +336,73 @@ export const issueTools: ToolDef[] = [
       const client = new LinearClient(ws)
       const { workspace: _, id, ...input } = args
       const data = await client.query(UPDATE_ISSUE_MUTATION, { id, input })
+      return JSON.stringify(data, null, 2)
+    },
+  },
+  {
+    name: 'list_issue_subscribers',
+    description: 'List subscribers/watchers on an issue. Use this before replacing subscriberIds directly.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...WORKSPACE_PROP,
+        id: { type: 'string', description: 'Issue UUID or identifier' },
+        ...PAGINATION_PROPS,
+      },
+      required: ['id'],
+    },
+    async handler(args) {
+      const ws = resolveWorkspace(args.workspace as string | undefined)
+      const client = new LinearClient(ws)
+      const data = await client.query(ISSUE_SUBSCRIBERS_QUERY, {
+        id: args.id,
+        first: (args.first as number) || 50,
+        after: args.after as string | undefined,
+      })
+      return JSON.stringify(data, null, 2)
+    },
+  },
+  {
+    name: 'subscribe_issue',
+    description: 'Subscribe/watch an issue by adding a user to its subscriberIds. Omits userId to subscribe the authenticated Linear user. Idempotent: keeps existing subscribers.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...WORKSPACE_PROP,
+        id: { type: 'string', description: 'Issue UUID or identifier' },
+        userId: { type: 'string', description: 'User UUID to subscribe. Defaults to the authenticated user.' },
+      },
+      required: ['id'],
+    },
+    async handler(args) {
+      const ws = resolveWorkspace(args.workspace as string | undefined)
+      const client = new LinearClient(ws)
+      const userId = await resolveSubscriberUserId(client, args.userId)
+      const current = await getIssueSubscriberIds(client, args.id)
+      const subscriberIds = current.includes(userId) ? current : [...current, userId]
+      const data = await client.query(UPDATE_ISSUE_MUTATION, { id: args.id, input: { subscriberIds } })
+      return JSON.stringify(data, null, 2)
+    },
+  },
+  {
+    name: 'unsubscribe_issue',
+    description: 'Unsubscribe/unwatch an issue by removing a user from its subscriberIds. Omits userId to unsubscribe the authenticated Linear user. Idempotent: keeps other subscribers.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...WORKSPACE_PROP,
+        id: { type: 'string', description: 'Issue UUID or identifier' },
+        userId: { type: 'string', description: 'User UUID to unsubscribe. Defaults to the authenticated user.' },
+      },
+      required: ['id'],
+    },
+    async handler(args) {
+      const ws = resolveWorkspace(args.workspace as string | undefined)
+      const client = new LinearClient(ws)
+      const userId = await resolveSubscriberUserId(client, args.userId)
+      const current = await getIssueSubscriberIds(client, args.id)
+      const subscriberIds = current.filter(id => id !== userId)
+      const data = await client.query(UPDATE_ISSUE_MUTATION, { id: args.id, input: { subscriberIds } })
       return JSON.stringify(data, null, 2)
     },
   },

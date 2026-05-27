@@ -295,7 +295,7 @@ async function buildProjectInput(
 export const projectTools: ToolDef[] = [
   {
     name: 'search_projects',
-    description: 'Search and filter projects.',
+    description: 'Search and filter projects. This returns rich project readback; use first <= 25 and paginate to avoid Linear query-complexity limits, especially on the free test workspace.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -303,7 +303,8 @@ export const projectTools: ToolDef[] = [
         name: { type: 'string', description: 'Filter by project name (partial match)' },
         state: { type: 'string', description: 'Filter by state: planned, started, paused, completed, canceled' },
         filter: { type: 'object', description: 'Raw ProjectFilter object (overrides convenience params)' },
-        ...PAGINATION_PROPS,
+        first: { type: 'integer', description: 'Number of results (default: 25, max: 25 for this rich query)', maximum: 25 },
+        after: PAGINATION_PROPS.after,
       },
     },
     async handler(args) {
@@ -315,9 +316,10 @@ export const projectTools: ToolDef[] = [
         if (args.name) filter.name = { containsIgnoreCase: args.name }
         if (args.state) filter.state = { eq: args.state }
       }
+      const first = Math.max(1, Math.min((args.first as number) || 25, 25))
       const variables: Record<string, unknown> = {
         filter: Object.keys(filter).length > 0 ? filter : undefined,
-        first: (args.first as number) || 50,
+        first,
         after: args.after as string | undefined,
       }
       const data = await client.query(SEARCH_PROJECTS_QUERY, variables)
@@ -400,8 +402,8 @@ export const projectTools: ToolDef[] = [
         memberIds: { type: 'array', items: { type: 'string' }, description: 'Member user UUIDs' },
         startDate: { type: 'string', description: 'Start date (ISO 8601)' },
         targetDate: { type: 'string', description: 'Target date (ISO 8601)' },
-        startDateResolution: { type: 'string', description: 'Date resolution for startDate (e.g. day, month, quarter, year)' },
-        targetDateResolution: { type: 'string', description: 'Date resolution for targetDate (e.g. day, month, quarter, year)' },
+        startDateResolution: { type: 'string', description: 'Date resolution for startDate: month, quarter, halfYear, or year' },
+        targetDateResolution: { type: 'string', description: 'Date resolution for targetDate: month, quarter, halfYear, or year' },
         icon: { type: 'string', description: 'Project icon. Linear accepts icon names such as "Briefcase" in current smoke coverage.' },
         color: { type: 'string', description: 'Color hex (e.g. "#5e6ad2")' },
         priority: { type: 'integer', description: '0=none, 1=urgent, 2=high, 3=medium, 4=low' },
@@ -623,6 +625,12 @@ export const projectTools: ToolDef[] = [
       },
       required: ['projectId'],
     },
+    examples: [
+      {
+        title: 'Project status update',
+        args: { workspace: 'personal', projectId: 'project-uuid', health: 'onTrack', body: 'Implementation is on track. Verification is passing.' },
+      },
+    ],
     async handler(args) {
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
@@ -707,6 +715,13 @@ export const projectTools: ToolDef[] = [
       },
       required: ['type', 'projectId', 'anchorType', 'relatedProjectId', 'relatedAnchorType'],
     },
+    examples: [
+      {
+        title: 'Project dependency',
+        description: 'Linear currently accepts dependency relations; anchors are start, end, or milestone.',
+        args: { workspace: 'personal', type: 'dependency', projectId: 'source-project-uuid', anchorType: 'end', relatedProjectId: 'blocked-project-uuid', relatedAnchorType: 'start' },
+      },
+    ],
     async handler(args) {
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)

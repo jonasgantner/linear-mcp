@@ -6,6 +6,8 @@ export type LinearWorkspace = {
 const WORKSPACE_DEFS: [string, string][] = [
   ['biz', 'LINEAR_BIZ_TOKEN'],
   ['personal', 'LINEAR_PERSONAL_TOKEN'],
+  ['test', 'LINEAR_TEST_WORKSPACE_TOKEN'],
+  ['jonas-test-workspace', 'LINEAR_TEST_WORKSPACE_TOKEN'],
 ]
 
 let workspaces: LinearWorkspace[] | null = null
@@ -30,7 +32,7 @@ export function loadWorkspaces(): LinearWorkspace[] {
   if (workspaces) return workspaces
   workspaces = discoverWorkspaces()
   if (workspaces.length === 0) {
-    throw new Error('No Linear workspaces configured. Set LINEAR_BIZ_TOKEN and/or LINEAR_PERSONAL_TOKEN.')
+    throw new Error('No Linear workspaces configured. Set LINEAR_BIZ_TOKEN, LINEAR_PERSONAL_TOKEN, and/or LINEAR_TEST_WORKSPACE_TOKEN.')
   }
   return workspaces
 }

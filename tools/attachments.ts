@@ -70,6 +70,17 @@ export const attachmentTools: ToolDef[] = [
       },
       required: ['issueId', 'title', 'url'],
     },
+    examples: [
+      {
+        title: 'External resource card',
+        description: 'Use attachments for URLs/resources, not local file uploads.',
+        args: { workspace: 'personal', issueId: 'J-559', title: 'Linear API docs', url: 'https://developers.linear.app/docs/graphql/working-with-the-graphql-api' },
+      },
+      {
+        title: 'Resource card with comment',
+        args: { workspace: 'personal', issueId: 'J-559', title: 'Design note', url: 'https://example.com/design-note', commentBody: 'Linked for context.' },
+      },
+    ],
     async handler(args) {
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
@@ -145,19 +156,31 @@ export const attachmentTools: ToolDef[] = [
   },
   {
     name: 'link_attachment_discord',
-    description: 'Link a Discord message to an issue. Requires Discord OAuth integration in the Linear workspace. Use create_attachment with a Discord URL as fallback if integration is not set up.',
+    description: 'Link a Discord message to an issue using Linear\'s Discord integration. Requires Discord OAuth integration in the Linear workspace. For Discord thread messages, pass the thread ID as channelId, the in-thread message ID as messageId, and the full /channels/<guild>/<thread>/<message> URL; Linear opens back into the correct thread on click. Use create_attachment with a Discord URL as fallback if integration is not set up.',
     inputSchema: {
       type: 'object',
       properties: {
         ...WORKSPACE_PROP,
         issueId: { type: 'string', description: 'Issue UUID or identifier' },
-        channelId: { type: 'string', description: 'Discord channel ID' },
-        messageId: { type: 'string', description: 'Discord message ID' },
+        channelId: { type: 'string', description: 'Discord channel ID, or thread ID when linking a message inside a Discord thread' },
+        messageId: { type: 'string', description: 'Discord message ID; for thread links this is the message ID inside the thread' },
         url: { type: 'string', description: 'Full Discord message URL (https://discord.com/channels/...)' },
         title: { type: 'string', description: 'Optional title (defaults to "Discord message")' },
       },
       required: ['issueId', 'channelId', 'messageId', 'url'],
     },
+    examples: [
+      {
+        title: 'Discord message in biz',
+        description: 'The Discord integration is enabled in biz; use create_attachment with the URL as fallback when the integration rejects the link.',
+        args: { workspace: 'biz', issueId: 'SPE-123', channelId: 'discord-channel-id', messageId: 'discord-message-id', url: 'https://discord.com/channels/guild/channel/message' },
+      },
+      {
+        title: 'Discord thread message in biz',
+        description: 'Use the Discord thread ID as channelId. Verified with SPE-2217: clicking the Linear attachment opened the linked Discord thread.',
+        args: { workspace: 'biz', issueId: 'SPE-123', channelId: 'discord-thread-id', messageId: 'thread-message-id', url: 'https://discord.com/channels/guild/thread/message', title: 'Discord thread' },
+      },
+    ],
     async handler(args) {
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)

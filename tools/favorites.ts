@@ -78,13 +78,14 @@ const FAVORITE_TARGET_PROPS = {
 export const favoriteTools: ToolDef[] = [
   {
     name: 'list_favorites',
-    description: 'List sidebar favorites and favorite folders. Favorites are personal to the authenticated Linear user.',
+    description: 'List sidebar favorites and favorite folders. Favorites are personal to the authenticated Linear user. This is a rich readback query; keep first <= 50 and paginate to avoid Linear query-complexity limits.',
     inputSchema: {
       type: 'object',
       properties: {
         ...WORKSPACE_PROP,
         includeArchived: { type: 'boolean', description: 'Include deleted/archived favorites (default: false)' },
-        ...PAGINATION_PROPS,
+        first: { type: 'integer', description: 'Number of results (default: 50, max: 50 for this rich query)', maximum: 50 },
+        after: PAGINATION_PROPS.after,
       },
     },
     examples: [
@@ -96,8 +97,9 @@ export const favoriteTools: ToolDef[] = [
     async handler(args) {
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
+      const first = Math.max(1, Math.min((args.first as number) || 50, 50))
       const data = await client.query(LIST_FAVORITES_QUERY, {
-        first: (args.first as number) || 50,
+        first,
         after: args.after as string | undefined,
         includeArchived: (args.includeArchived as boolean) || false,
       })
@@ -106,7 +108,7 @@ export const favoriteTools: ToolDef[] = [
   },
   {
     name: 'create_favorite',
-    description: 'Create a sidebar favorite or folder. Use folderName for a folder; otherwise provide exactly one target ID such as customViewId, projectId, issueId, labelId, or initiativeId. Use parentId to place it inside a folder and sortOrder for manual ordering.',
+    description: 'Create a sidebar favorite or folder. Use folderName for a folder; otherwise provide exactly one target ID such as customViewId, projectId, issueId, labelId, or initiativeId. Use parentId to place it inside a folder. sortOrder is best-effort: Linear may normalize ordering on readback.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -114,7 +116,7 @@ export const favoriteTools: ToolDef[] = [
         id: { type: 'string', description: 'Optional client-generated favorite UUID' },
         folderName: { type: 'string', description: 'Folder name; if set without a target this creates a favorite folder' },
         parentId: { type: 'string', description: 'Parent favorite folder UUID' },
-        sortOrder: { type: 'number', description: 'Manual order within the sidebar/folder' },
+        sortOrder: { type: 'number', description: 'Manual order within the sidebar/folder; Linear may normalize this value on readback' },
         ...FAVORITE_TARGET_PROPS,
       },
     },
@@ -138,7 +140,7 @@ export const favoriteTools: ToolDef[] = [
   },
   {
     name: 'update_favorite',
-    description: 'Update a favorite folder name, parent folder, or sortOrder. Linear only exposes folderName, parentId, and sortOrder for favorite updates.',
+    description: 'Update a favorite folder name, parent folder, or sortOrder. Linear only exposes folderName, parentId, and sortOrder for favorite updates; sortOrder updates can be accepted but normalized on readback.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -146,7 +148,7 @@ export const favoriteTools: ToolDef[] = [
         id: { type: 'string', description: 'Favorite UUID' },
         folderName: { type: 'string', description: 'New folder name, for folder favorites' },
         parentId: { type: 'string', description: 'New parent favorite folder UUID; set null through raw JSON to move to root if Linear accepts it' },
-        sortOrder: { type: 'number', description: 'Manual order within the sidebar/folder' },
+        sortOrder: { type: 'number', description: 'Manual order within the sidebar/folder; Linear may normalize this value on readback' },
       },
       required: ['id'],
     },

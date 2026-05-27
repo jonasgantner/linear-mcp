@@ -44,10 +44,7 @@ const IMAGE_UPLOAD_FROM_URL_MUTATION = `
   mutation ImageUploadFromUrl($url: String!) {
     imageUploadFromUrl(url: $url) {
       success
-      uploadFile {
-        filename contentType size uploadUrl assetUrl metaData
-        headers { key value }
-      }
+      url
     }
   }
 `
@@ -313,6 +310,17 @@ export const fileTools: ToolDef[] = [
       },
       required: ['path'],
     },
+    examples: [
+      {
+        title: 'Upload local PDF',
+        description: 'Use file upload tools for local binary files; the result includes markdown to paste into descriptions/comments/documents.',
+        args: { workspace: 'personal', path: '/absolute/path/report.pdf', makePublic: false },
+      },
+      {
+        title: 'Upload image with markdown',
+        args: { workspace: 'personal', path: '/absolute/path/screenshot.png', embedImages: true },
+      },
+    ],
     async handler(args) {
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
@@ -342,19 +350,19 @@ export const fileTools: ToolDef[] = [
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
       const data = await client.query<{
-        imageUploadFromUrl: { success: boolean; uploadFile: UploadFile | null }
+        imageUploadFromUrl: { success: boolean; url: string | null }
       }>(IMAGE_UPLOAD_FROM_URL_MUTATION, { url: args.url })
-      const upload = data.imageUploadFromUrl.uploadFile
-      if (!data.imageUploadFromUrl.success || !upload) {
+      const assetUrl = data.imageUploadFromUrl.url
+      if (!data.imageUploadFromUrl.success || !assetUrl) {
         throw new Error('Linear did not return an uploaded image URL')
       }
+      const filename = assetUrl.split('/').pop() || 'image'
       const result: UploadResult = {
-        filename: upload.filename,
-        contentType: upload.contentType,
-        size: upload.size,
-        assetUrl: upload.assetUrl,
-        markdown: markdownForUpload(upload, (args.embedImages as boolean | undefined) ?? true),
-        metaData: upload.metaData,
+        filename,
+        contentType: 'image/*',
+        size: 0,
+        assetUrl,
+        markdown: markdownForUpload({ filename, contentType: 'image/*', assetUrl }, (args.embedImages as boolean | undefined) ?? true),
       }
       return JSON.stringify({ upload: result }, null, 2)
     },
@@ -378,6 +386,17 @@ export const fileTools: ToolDef[] = [
       },
       required: ['paths'],
     },
+    examples: [
+      {
+        title: 'Issue comment with files',
+        args: { workspace: 'personal', issueId: 'J-559', body: 'Attached verification output.', paths: ['/absolute/path/report.md', '/absolute/path/screenshot.png'] },
+      },
+      {
+        title: 'Inline comment with files',
+        description: 'Use issueDescriptionId/documentId plus quotedText for GUI-highlighted anchors.',
+        args: { workspace: 'personal', issueDescriptionId: 'J-559', quotedText: 'CAPABILITIES.md', body: 'Rendered output attached.', paths: ['/absolute/path/capabilities-diff.txt'] },
+      },
+    ],
     async handler(args) {
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
@@ -588,7 +607,7 @@ export const fileTools: ToolDef[] = [
         title: { type: 'string', description: 'Document title' },
         content: { type: 'string', description: 'Optional document markdown before uploaded file links' },
         paths: { type: 'array', items: { type: 'string' }, description: 'Absolute local file paths to upload' },
-        icon: { type: 'string', description: 'Document icon' },
+        icon: { type: 'string', description: 'Linear icon name (e.g. "Health")' },
         color: { type: 'string', description: 'Color hex' },
         projectId: { type: 'string', description: 'Link to project UUID' },
         initiativeId: { type: 'string', description: 'Link to initiative UUID' },

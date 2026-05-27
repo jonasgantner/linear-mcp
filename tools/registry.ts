@@ -31,11 +31,6 @@ type ToolGroup = {
 
 const FEATURE_GATES: Record<string, string> = {
   link_attachment_discord: 'Requires the Discord OAuth integration in the Linear workspace.',
-  create_initiative_relation: 'Requires Linear Enterprise sub-initiative relations.',
-  update_initiative_relation: 'Requires Linear Enterprise sub-initiative relations.',
-  delete_initiative_relation: 'Requires Linear Enterprise sub-initiative relations.',
-  add_initiative_label: 'Requires initiative labels to be enabled for the workspace.',
-  remove_initiative_label: 'Requires initiative labels to be enabled for the workspace.',
 }
 
 const rawToolGroups: ToolGroup[] = [

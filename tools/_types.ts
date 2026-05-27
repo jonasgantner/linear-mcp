@@ -41,7 +41,7 @@ export type ToolDef = {
 export const WORKSPACE_PROP = {
   workspace: {
     type: 'string',
-    description: 'Workspace: biz (default) or personal.',
+    description: 'Workspace: biz (default), personal, test, or jonas-test-workspace.',
   },
 } as const
 

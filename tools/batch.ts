@@ -43,7 +43,7 @@ export const batchTools: ToolDef[] = [
         ...WORKSPACE_PROP,
         issues: {
           type: 'array',
-          description: 'Array of issue inputs. Each must include teamId and title. Supports all create_issue fields: description, priority, stateId, assigneeId, labelIds, cycleId, projectId, dueDate, estimate, parentId.',
+          description: 'Array of issue inputs. Each must include teamId and title. Supports all create_issue fields: description, priority, stateId, assigneeId, labelIds, cycleId, projectId, projectMilestoneId, dueDate, estimate, parentId, and subscriberIds.',
           items: { type: 'object' },
         },
       },
@@ -59,7 +59,7 @@ export const batchTools: ToolDef[] = [
   },
   {
     name: 'issue_batch_update',
-    description: 'Apply the same update to multiple issues at once. Pass an array of issue UUIDs and the fields to update (same as update_issue). Supports null to clear fields.',
+    description: 'Apply the same update to multiple issues at once. Pass an array of issue UUIDs and the fields to update (same as update_issue). Supports null to clear some fields; if any issue ID is invalid, Linear rejects the batch operation.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -71,11 +71,12 @@ export const batchTools: ToolDef[] = [
         },
         priority: { type: 'integer', description: 'Priority (0=none, 1=urgent, 2=high, 3=medium, 4=low)' },
         stateId: { type: 'string', description: 'Workflow state UUID' },
-        assigneeId: { type: 'string', description: 'Assignee user UUID (null to unassign)' },
-        dueDate: { type: 'string', description: 'Due date YYYY-MM-DD (null to clear)' },
-        cycleId: { type: 'string', description: 'Cycle UUID' },
-        projectId: { type: 'string', description: 'Project UUID. Set to null through raw JSON to clear if Linear accepts the clear.' },
-        projectMilestoneId: { type: 'string', description: 'Project milestone UUID. Set to null through raw JSON to remove from a milestone if Linear accepts the clear.' },
+        assigneeId: { type: ['string', 'null'], description: 'Assignee user UUID, or null to unassign' },
+        dueDate: { type: ['string', 'null'], description: 'Due date YYYY-MM-DD, or null to clear' },
+        cycleId: { type: ['string', 'null'], description: 'Cycle UUID, or null to remove from cycle' },
+        projectId: { type: ['string', 'null'], description: 'Project UUID to move all issues to the project, or null to clear project' },
+        projectMilestoneId: { type: ['string', 'null'], description: 'Project milestone UUID, or null to remove from milestone' },
+        estimate: { type: ['number', 'null'], description: 'Point estimate, or null to clear estimate' },
         addedLabelIds: { type: 'array', items: { type: 'string' }, description: 'Label UUIDs to add' },
         removedLabelIds: { type: 'array', items: { type: 'string' }, description: 'Label UUIDs to remove' },
       },

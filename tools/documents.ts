@@ -2,6 +2,7 @@ import type { ToolDef } from './_types.js'
 import { WORKSPACE_PROP, PAGINATION_PROPS } from './_types.js'
 import { resolveWorkspace } from '../workspaces.js'
 import { LinearClient } from '../client.js'
+import { COMMENT_READ_FIELDS } from './commentRead.js'
 
 const CREATE_DOCUMENT_MUTATION = `
   mutation CreateDocument($input: DocumentCreateInput!) {
@@ -32,14 +33,17 @@ const GET_DOCUMENT_QUERY = `
       project { id name }
       initiative { id name }
       creator { name }
-      comments {
-        nodes {
-          id body quotedText url documentContentId parentId
-          user { name }
-          createdAt updatedAt resolvedAt
-        }
-      }
       createdAt updatedAt
+    }
+  }
+`
+
+const GET_DOCUMENT_COMMENTS_QUERY = `
+  query GetDocumentComments($documentContentId: ID!) {
+    comments(filter: { documentContent: { id: { eq: $documentContentId } } }, first: 25) {
+      nodes {
+        ${COMMENT_READ_FIELDS}
+      }
     }
   }
 `
@@ -75,7 +79,7 @@ export const documentTools: ToolDef[] = [
         ...WORKSPACE_PROP,
         title: { type: 'string', description: 'Document title (required)' },
         content: { type: 'string', description: 'Document body (markdown)' },
-        icon: { type: 'string', description: 'Document icon (emoji)' },
+        icon: { type: 'string', description: 'Linear icon name (e.g. "Health")' },
         color: { type: 'string', description: 'Color hex (e.g. "#5e6ad2")' },
         projectId: { type: 'string', description: 'Link to project UUID' },
         initiativeId: { type: 'string', description: 'Link to initiative UUID' },
@@ -101,7 +105,7 @@ export const documentTools: ToolDef[] = [
         id: { type: 'string', description: 'Document UUID (required)' },
         title: { type: 'string', description: 'New title' },
         content: { type: 'string', description: 'New content (markdown)' },
-        icon: { type: 'string', description: 'New icon (emoji)' },
+        icon: { type: 'string', description: 'New Linear icon name (e.g. "Health")' },
         color: { type: 'string', description: 'New color hex' },
       },
       required: ['id'],
@@ -128,7 +132,16 @@ export const documentTools: ToolDef[] = [
     async handler(args) {
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
-      const data = await client.query(GET_DOCUMENT_QUERY, { id: args.id })
+      const data = await client.query<{ document: { documentContentId?: string | null; comments?: unknown } }>(
+        GET_DOCUMENT_QUERY,
+        { id: args.id },
+      )
+      if (data.document.documentContentId) {
+        const comments = await client.query(GET_DOCUMENT_COMMENTS_QUERY, {
+          documentContentId: data.document.documentContentId,
+        })
+        data.document.comments = (comments as { comments: unknown }).comments
+      }
       return JSON.stringify(data, null, 2)
     },
   },
