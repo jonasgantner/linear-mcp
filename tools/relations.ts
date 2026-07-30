@@ -9,8 +9,8 @@ const CREATE_ISSUE_RELATION_MUTATION = `
       success
       issueRelation {
         id type
-        issue { id identifier title }
-        relatedIssue { id identifier title }
+        issue { id identifier title url }
+        relatedIssue { id identifier title url }
       }
     }
   }
@@ -19,14 +19,14 @@ const CREATE_ISSUE_RELATION_MUTATION = `
 const GET_DUPLICATE_ISSUE_QUERY = `
   query GetDuplicateIssue($id: String!) {
     issue(id: $id) {
-      id identifier title
+      id identifier title url
       state { id name type }
       team {
         id name key
         states { nodes { id name type color } }
       }
-      relations { nodes { id type relatedIssue { id identifier title } } }
-      inverseRelations { nodes { id type issue { id identifier title } } }
+      relations { nodes { id type relatedIssue { id identifier title url } } }
+      inverseRelations { nodes { id type issue { id identifier title url } } }
     }
   }
 `
@@ -36,10 +36,10 @@ const UPDATE_ISSUE_STATE_MUTATION = `
     issueUpdate(id: $id, input: $input) {
       success
       issue {
-        id identifier title
+        id identifier title url
         state { id name type }
-        relations { nodes { id type relatedIssue { id identifier title } } }
-        inverseRelations { nodes { id type issue { id identifier title } } }
+        relations { nodes { id type relatedIssue { id identifier title url } } }
+        inverseRelations { nodes { id type issue { id identifier title url } } }
       }
     }
   }
@@ -55,10 +55,11 @@ type DuplicateIssue = {
   id: string
   identifier: string
   title: string
+  url?: string
   state?: { id: string; name: string; type: string }
   team?: { states?: { nodes: Array<{ id: string; name: string; type: string }> } }
-  relations?: { nodes: Array<{ id: string; type: string; relatedIssue?: { id: string; identifier: string; title: string } }> }
-  inverseRelations?: { nodes: Array<{ id: string; type: string; issue?: { id: string; identifier: string; title: string } }> }
+  relations?: { nodes: Array<{ id: string; type: string; relatedIssue?: { id: string; identifier: string; title: string; url?: string } }> }
+  inverseRelations?: { nodes: Array<{ id: string; type: string; issue?: { id: string; identifier: string; title: string; url?: string } }> }
 }
 
 function findDuplicateState(issue: DuplicateIssue, duplicateStateId?: unknown): string {

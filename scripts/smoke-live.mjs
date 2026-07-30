@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 
 const DEFAULT_COMMAND = '/Users/jonas/.agents/mcp/wrappers/linear.sh'
-const WORKSPACE = argValue('--workspace') ?? 'jonas-test-workspace'
+const WORKSPACE = argValue('--workspace') ?? 'test'
 const FIXTURE_PREFIX = 'MCP Smoke'
 const SANDBOX_NAME = 'Linear MCP Sandbox'
 
@@ -656,6 +656,7 @@ async function scenarioOrganize(client, sandbox) {
 
 async function scenarioComments(client, sandbox) {
   await callJson(client, 'check_comment_schema_drift', { workspace: WORKSPACE })
+  await callJson(client, 'check_document_schema_drift', { workspace: WORKSPACE })
 
   const issueQuote = `inline issue quote ${runId}`
   const issue = nodeFrom((await callJson(client, 'create_issue', {

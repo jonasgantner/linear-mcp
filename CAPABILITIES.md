@@ -3,8 +3,8 @@
 <!-- GENERATED FILE: run `bun run docs:capabilities` from this server directory. Do not hand-edit. -->
 
 **Server source**: `/Users/jonas/.agents/mcp/servers/linear`
-**Tool count**: 131
-**Workspace-aware tools**: 131/131
+**Tool count**: 136
+**Workspace-aware tools**: 135/136
 **Paginated tools**: 13
 
 ## Source Of Truth
@@ -27,7 +27,7 @@ Useful live-discovery tools: `get_viewer`, `get_teams`, `list_labels`, `list_pro
 
 When starting without recent context, follow this order:
 
-1. Pick the workspace from the issue prefix or user request: `SPE-` -> `biz`; `J-` -> `personal`; `JON-` or disposable live tests -> `jonas-test-workspace`/`test`.
+1. Pick the workspace from the issue prefix or user request: `SPE-` -> `biz`; `J-` -> `personal`; `TEST-` or disposable live tests -> `test`.
 2. Query live IDs before writing. Use names only for search/discovery; write calls usually need UUIDs.
 3. Prefer readback after every write. The useful pattern is write -> `get_*`/`list_*` -> assert the changed field.
 4. Treat old Linear comments, screenshots, and chat summaries as leads, not source of truth.
@@ -70,13 +70,14 @@ When starting without recent context, follow this order:
 | Notifications | 7 | 2 | 5 | 0 | 0 | 0 |
 | Issue Relations | 3 | 0 | 2 | 0 | 1 | 0 |
 | Reactions | 2 | 0 | 1 | 0 | 1 | 0 |
-| Documents | 5 | 2 | 2 | 0 | 1 | 0 |
+| Documents | 6 | 3 | 2 | 0 | 1 | 0 |
 | Favorites | 4 | 1 | 2 | 0 | 1 | 0 |
 | Views | 7 | 3 | 3 | 0 | 1 | 0 |
-| Files | 10 | 0 | 0 | 10 | 0 | 0 |
-| Attachments | 5 | 0 | 4 | 0 | 1 | 1 |
+| Files | 11 | 0 | 1 | 10 | 0 | 0 |
+| Attachments | 7 | 2 | 4 | 0 | 1 | 1 |
 | Batch Operations | 2 | 0 | 2 | 0 | 0 | 0 |
 | Templates | 7 | 2 | 4 | 0 | 1 | 0 |
+| Metadata | 1 | 1 | 0 | 0 | 0 | 0 |
 
 ## Users
 
@@ -102,7 +103,7 @@ Source files: `tools/issues.ts`
 | Tool | Effect | Required params | Input fields | Feature gate | Description |
 |---|---|---|---:|---|---|
 | `search_issues` | read | - | 12 | - | Search and filter issues. Supports convenience params (state, assignee, label, team, project, priority, query) or a raw IssueFilter object for advanced filtering. |
-| `get_issue` | read | `id` | 2 | - | Get a single issue by ID or identifier (e.g. "SPE-123"). Returns full details including comments, children, and relations. |
+| `get_issue` | read | `id` | 3 | - | Get a single issue by ID or identifier (e.g. "SPE-123"). Returns structured descriptionAssets, full comment assets/metadata, linked documents, children, and relations. |
 | `create_issue` | write | `teamId`, `title` | 15 | - | Create a new issue. Requires teamId and title at minimum. Supports the same routine organization fields as update_issue, including projectMilestoneId and subscriberIds. |
 | `update_issue` | write | `id` | 20 | - | Update an existing issue. Pass the issue ID and any fields to change. Nullable fields that Linear accepts can be cleared with raw JSON null: assigneeId, cycleId, projectId, projectMilestoneId, parentId, dueDate, estimate, and snoozedUntilAt. |
 | `list_issue_subscribers` | read | `id` | 4 | - | List subscribers/watchers on an issue. Use this before replacing subscriberIds directly. |
@@ -164,7 +165,7 @@ Source files: `tools/comments.ts`
 | Tool | Effect | Required params | Input fields | Feature gate | Description |
 |---|---|---|---:|---|---|
 | `get_comment` | read | `id` | 2 | - | Get one comment by UUID with parent, child replies, resolver metadata, target IDs, and source quote details. |
-| `list_comments` | read | - | 17 | - | List comments with full thread readback. Filter by issueId, issueDescriptionId, documentId, documentContentId, projectId, initiativeId, projectUpdateId, parentId, projectContentId, initiativeContentId, query, or raw CommentFilter. |
+| `list_comments` | read | - | 17 | - | List full comments with parent, child reply, actor metadata, reactionData, thread summary, and structured asset readback. Internally paginates to avoid Linear query-complexity limits. Filter by issueId, issueDescriptionId, documentId, documentContentId, projectId, initiativeId, projectUpdateId, parentId, projectContentId, initiativeContentId, query, or raw CommentFilter. |
 | `check_comment_schema_drift` | read | - | 1 | - | Check the live Linear GraphQL schema for comment fields, filters, and create/update input fields used by the MCP. |
 | `create_comment` | write | `body` | 16 | - | Add a comment to an issue, project, initiative, document content, project update, initiative update, or post. Provide exactly one target. Use parentId to reply; use quotedText with issueDescriptionId/documentId to create a real inline source anchor. |
 | `update_comment` | write | `id`, `body` | 3 | - | Edit an existing comment. |
@@ -230,11 +231,11 @@ Source files: `tools/initiatives.ts`
 
 | Tool | Effect | Required params | Input fields | Feature gate | Description |
 |---|---|---|---:|---|---|
-| `list_initiatives` | read | - | 3 | - | List all initiatives in the workspace. |
+| `list_initiatives` | read | - | 4 | - | List all initiatives in the workspace. |
 | `get_initiative` | read | `id` | 2 | - | Get a single initiative by ID with content, direct comments, linked projects, and updates. |
 | `list_initiative_project_links` | read | - | 5 | - | List initiative-project link records. Optional client-side filters support initiativeId and projectId. |
-| `create_initiative` | write | `name` | 12 | - | Create a new initiative. |
-| `update_initiative` | write | `id` | 17 | - | Update an existing initiative. |
+| `create_initiative` | write | `name` | 14 | - | Create a new initiative. |
+| `update_initiative` | write | `id` | 19 | - | Update an existing initiative. |
 | `archive_initiative` | write | `id` | 2 | - | Archive an initiative. Reversible via unarchive_initiative. |
 | `unarchive_initiative` | write | `id` | 2 | - | Restore an archived initiative. |
 | `link_initiative_project` | write | `initiativeId`, `projectId` | 4 | - | Link a project to an initiative. |
@@ -247,7 +248,7 @@ Source files: `tools/initiatives.ts`
 
 Examples:
 
-- `create_initiative` (Smoke initiative): `{"workspace":"personal","name":"MCP Smoke Initiative","status":"Planned","icon":"MagicWand","color":"#5e6ad2"}`
+- `create_initiative` (Smoke initiative): `{"workspace":"personal","name":"MCP Smoke Initiative","status":"Proposed","priority":3,"icon":"MagicWand","color":"#5e6ad2"}`
 
 ## Notifications
 
@@ -300,11 +301,17 @@ Source files: `tools/documents.ts`
 
 | Tool | Effect | Required params | Input fields | Feature gate | Description |
 |---|---|---|---:|---|---|
-| `create_document` | write | `title` | 8 | - | Create a document. Link to a project, initiative, or team. |
-| `update_document` | write | `id` | 6 | - | Update a document title, content, icon, or color. |
-| `get_document` | read | `id` | 2 | - | Get a document by UUID, including full markdown content. |
-| `search_documents` | read | - | 6 | - | Search and list documents. Optionally filter by project or initiative. |
+| `create_document` | write | `title` | 9 | - | Create a document. Link to an issue, project, initiative, or team by passing the matching parent ID. |
+| `update_document` | write | `id` | 10 | - | Update a document title, content, icon, color, or parent association. |
+| `get_document` | read | `id` | 3 | - | Get a document by UUID, including full markdown content, structured content assets, and full comment metadata/assets. |
+| `search_documents` | read | - | 8 | - | Search and list documents. Optionally filter by issue, project, initiative, or team. |
+| `check_document_schema_drift` | read | - | 1 | - | Check the live Linear GraphQL schema for document create/update inputs, parent fields, and filters used by the MCP. |
 | `delete_document` | delete | `id` | 2 | - | Delete a document. |
+
+Examples:
+
+- `create_document` (Issue document): `{"workspace":"personal","issueId":"J-559","title":"Decision log","content":"# Decision log\n\n..."}`
+- `create_document` (Team document): `{"workspace":"test","teamId":"team-uuid","title":"Team runbook","content":"Runbook body."}`
 
 ## Favorites
 
@@ -333,8 +340,8 @@ Source files: `tools/views.ts`
 | `list_views` | read | - | 5 | - | List saved custom views (filters). By default this returns workspace/team-level views from Linear customViews, which explicitly excludes project/initiative tab views. Pass projectId or initiativeId to list UI tab views attached via facets. Use first <= 50 per page and paginate with after for the default customViews listing. |
 | `get_view` | read | `id` | 2 | - | Get a custom view by ID with its filter configuration, effective preferences, model type, and facet readback when it is attached as a project/initiative/team/workspace tab. |
 | `check_view_schema_drift` | read | - | 1 | - | Check the live Linear GraphQL schema for the custom-view input/filter fields used by MCP schemas, examples, and smoke fixtures. Fails if a required field disappears. |
-| `create_view` | write | `name` | 15 | - | Create a saved custom view (filter). Returns full custom-view readback including owner/team/facet, model type, filters, preferences, and timestamps. Omit teamId for workspace-level issue views; pass teamId only when you intentionally need a team-scoped issue view. Linear public GraphQL currently accepts projectId/initiativeId but does not create the UI project/initiative tab facet; use list_views with projectId/initiativeId or get_view.facet to read UI-created scoped tabs. Do not put team in filterData because Linear renders that as a non-editable raw filter; this tool strips team filters from filterData. Use filterData for editable issue filters and projectFilterData for project views. For GUI-friendly project views, this tool strips project status filters from projectFilterData; use projectGrouping/display preferences instead. The tool normalizes common unsafe shapes like state.type.eq. Icons accept Linear icon names such as "Health", "Rocket", or "Briefcase"; colors use hex. |
-| `update_view` | write | `id` | 15 | - | Update a custom view, including filters and visual metadata. Returns full custom-view readback including owner/team/facet, model type, filters, preferences, and timestamps. Linear public GraphQL currently accepts projectId/initiativeId but does not create or move the UI project/initiative tab facet; check get_view.facet for real scoped-tab attachment. Icons accept Linear icon names; colors use hex. |
+| `create_view` | write | `name` | 15 | - | Create a saved custom view (filter). Returns full custom-view readback including owner/team/facet, model type, filters, preferences, and timestamps. Omit teamId for workspace-level issue views; pass teamId only when you intentionally need a team-scoped issue view. Linear public GraphQL currently accepts projectId/initiativeId but does not create the UI project/initiative tab facet; use list_views with projectId/initiativeId or get_view.facet to read UI-created scoped tabs. Do not put team in filterData because Linear renders that as a non-editable raw filter; this tool strips team filters from filterData. Use filterData for editable issue filters and projectFilterData for project views. For GUI-friendly project views, this tool strips project status filters from projectFilterData; use projectGrouping/display preferences instead. The tool normalizes common unsafe shapes like state.type.eq. Icons use decorative PascalCase names or emoji colon shortcodes; colors use hex. |
+| `update_view` | write | `id` | 15 | - | Update a custom view, including filters and visual metadata. Returns full custom-view readback including owner/team/facet, model type, filters, preferences, and timestamps. Linear public GraphQL currently accepts projectId/initiativeId but does not create or move the UI project/initiative tab facet; check get_view.facet for real scoped-tab attachment. Icons use decorative PascalCase names or emoji colon shortcodes; colors use hex. |
 | `delete_view` | delete | `id` | 2 | - | Delete a custom view. |
 | `set_view_preferences` | write | `customViewId`, `preferences` | 4 | - | Set layout, grouping, ordering, and display fields for a custom view. The tool normalizes common aliases (for example status -> workflowState, noGrouping -> none, createdAt -> dateCreated) so the Linear UI does not show blank dropdown states. |
 
@@ -360,6 +367,7 @@ Source files: `tools/files.ts`
 
 | Tool | Effect | Required params | Input fields | Feature gate | Description |
 |---|---|---|---:|---|---|
+| `download_file` | write | `url`, `destinationPath` | 4 | - | Download or retrieve an embedded private Linear file, such as a PDF, image, or other asset, from an issue description, comment, or document. Pass a https://uploads.linear.app URL from get_issue descriptionAssets/comment assets or get_document contentAssets; saves with workspace authentication to an absolute local path. Streams up to 10 GB, verifies SHA-256, and refuses overwrite by default. |
 | `upload_file` | upload | `path` | 7 | - | Upload one local file to Linear private storage using fileUpload + signed PUT. Returns assetUrl and markdown. This is distinct from URL/resource attachments. |
 | `upload_image_from_url` | upload | `url` | 3 | - | Ask Linear to upload an image from a public URL into Linear storage. Returns assetUrl and markdown. |
 | `create_comment_with_files` | upload | `paths` | 20 | - | Upload local files and create a Linear comment containing their markdown links/assets. Provide exactly one comment target. Use issueDescriptionId/documentId with quotedText to create a real inline source anchor. |
@@ -368,11 +376,12 @@ Source files: `tools/files.ts`
 | `append_initiative_files` | upload | `initiativeId`, `paths` | 7 | - | Upload local files and append their markdown links/assets to an initiative rich content field. |
 | `create_project_update_with_files` | upload | `projectId`, `paths` | 8 | - | Upload local files and create a project status update containing their markdown links/assets. |
 | `create_initiative_update_with_files` | upload | `initiativeId`, `paths` | 8 | - | Upload local files and create an initiative status update containing their markdown links/assets. |
-| `create_document_with_files` | upload | `title`, `paths` | 12 | - | Upload local files and create a Linear document containing their markdown links/assets. |
+| `create_document_with_files` | upload | `title`, `paths` | 13 | - | Upload local files and create a Linear document containing their markdown links/assets. |
 | `update_document_with_files` | upload | `id`, `paths` | 7 | - | Upload local files and append their markdown links/assets to an existing Linear document. |
 
 Examples:
 
+- `download_file` (Download an embedded issue PDF): `{"workspace":"test","url":"https://uploads.linear.app/path/to/private-file","destinationPath":"/absolute/path/form.pdf"}` - Use the URL returned by get_issue.issue.descriptionAssets and keep the same workspace.
 - `upload_file` (Upload local PDF): `{"workspace":"personal","path":"/absolute/path/report.pdf","makePublic":false}` - Use file upload tools for local binary files; the result includes markdown to paste into descriptions/comments/documents.
 - `upload_file` (Upload image with markdown): `{"workspace":"personal","path":"/absolute/path/screenshot.png","embedImages":true}`
 - `create_comment_with_files` (Issue comment with files): `{"workspace":"personal","issueId":"J-559","body":"Attached verification output.","paths":["/absolute/path/report.md","/absolute/path/screenshot.png"]}`
@@ -384,6 +393,8 @@ Source files: `tools/attachments.ts`
 
 | Tool | Effect | Required params | Input fields | Feature gate | Description |
 |---|---|---|---:|---|---|
+| `get_attachment` | read | `id` | 2 | - | Get one external URL attachment card by UUID, including its associated issue and metadata. This does not download binary files. |
+| `find_attachments_by_url` | read | `url` | 2 | - | Find external URL attachment cards by their exact URL, including associated issues and metadata. This does not search private binary uploads. |
 | `create_attachment` | write | `issueId`, `title`, `url` | 8 | - | Attach a URL/resource to an issue. Supports optional metadata (JSON), iconUrl, and commentBody (auto-creates a comment on the issue). |
 | `update_attachment` | write | `id` | 6 | - | Update an attachment's title, subtitle, url, or metadata. |
 | `delete_attachment` | delete | `id` | 2 | - | Delete an attachment from an issue. |
@@ -428,11 +439,20 @@ Examples:
 
 - `create_recurring_issue_template` (Weekly recurring issue): `{"workspace":"test","name":"MCP Smoke Weekly Template","teamId":"team-uuid","title":"Weekly review","issueDescription":"Recurring issue generated by Linear.","scheduleInterval":1,"scheduleType":"weeks","startAt":"2026-12-31","icon":"Health","color":"#5e6ad2"}` - Use a far-future startAt for fixtures, but still verify whether Linear created an initial issue and archive it separately.
 
+## Metadata
+
+Source files: `tools/visualMetadata.ts`
+
+| Tool | Effect | Required params | Input fields | Feature gate | Description |
+|---|---|---|---:|---|---|
+| `list_visual_metadata_registry` | read | - | 1 | - | List accepted Linear visual metadata values for icon/color fields. Icons use decorative PascalCase names or emoji colon shortcodes; colors use hex. |
+
 ## Runtime Notes
 
-- `workspace` selects `biz`, `personal`, `test`, or `jonas-test-workspace` where the tool schema exposes it; `biz` is the default.
-- Workspace plan levels: `biz` and `personal` are Basic; `jonas-test-workspace` is Free.
+- `workspace` selects `biz`, `personal`, or `test` where the tool schema exposes it; `biz` is the default.
+- Workspace plan levels: `biz` and `personal` are Basic; `test` is Free.
 - Prefer archive/unarchive tools over hard-delete tools except for disposable test records.
 - Binary/local file uploads use the file tools. URL/resource cards use attachment tools.
+- Private files are discovered as `get_issue.issue.descriptionAssets`, comment `assets`, or `get_document.document.contentAssets`, then downloaded with `download_file`.
 - Workspace-level views omit `teamId` and use shared organization preferences.
 - Project statuses, labels, templates, and views are workspace-level unless a tool call explicitly scopes them.

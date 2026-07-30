@@ -6,17 +6,17 @@ import { LinearClient } from '../client.js'
 const FAVORITE_FIELDS = `
   id type title detail color icon folderName sortOrder archivedAt createdAt updatedAt
   owner { id name }
-  parent { id title folderName sortOrder }
-  children { nodes { id type title folderName sortOrder } }
-  issue { id identifier title }
-  project { id name }
+  parent { id title folderName sortOrder url }
+  children { nodes { id type title folderName sortOrder url } }
+  issue { id identifier title url }
+  project { id name url }
   projectTab
   predefinedViewType
   predefinedViewTeam { id name key }
   cycle { id number name }
-  customView { id name icon color }
-  document { id title }
-  initiative { id name }
+  customView { id name slugId icon color }
+  document { id title url }
+  initiative { id name url }
   initiativeTab
   label { id name color }
   projectLabel { id name color }
@@ -57,6 +57,34 @@ const DELETE_FAVORITE_MUTATION = `
     favoriteDelete(id: $id) { success }
   }
 `
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function copyFavoriteUrlToTarget(record: Record<string, unknown>) {
+  if (typeof record.url !== 'string') return
+
+  // These favorite targets do not expose their own native URL in nested readbacks.
+  for (const key of ['customView', 'cycle', 'label', 'projectLabel']) {
+    const target = record[key]
+    if (isRecord(target) && typeof target.url !== 'string') {
+      target.url = record.url
+    }
+  }
+}
+
+function enrichFavoriteTargetUrls<T>(value: T): T {
+  if (Array.isArray(value)) {
+    for (const item of value) enrichFavoriteTargetUrls(item)
+    return value
+  }
+  if (!isRecord(value)) return value
+
+  copyFavoriteUrlToTarget(value)
+  for (const child of Object.values(value)) enrichFavoriteTargetUrls(child)
+  return value
+}
 
 const FAVORITE_TARGET_PROPS = {
   issueId: { type: 'string', description: 'Favorite an issue UUID' },
@@ -103,7 +131,7 @@ export const favoriteTools: ToolDef[] = [
         after: args.after as string | undefined,
         includeArchived: (args.includeArchived as boolean) || false,
       })
-      return JSON.stringify(data, null, 2)
+      return JSON.stringify(enrichFavoriteTargetUrls(data), null, 2)
     },
   },
   {
@@ -135,7 +163,7 @@ export const favoriteTools: ToolDef[] = [
       const client = new LinearClient(ws)
       const { workspace: _, ...input } = args
       const data = await client.query(CREATE_FAVORITE_MUTATION, { input })
-      return JSON.stringify(data, null, 2)
+      return JSON.stringify(enrichFavoriteTargetUrls(data), null, 2)
     },
   },
   {
@@ -163,7 +191,7 @@ export const favoriteTools: ToolDef[] = [
       const client = new LinearClient(ws)
       const { workspace: _, id, ...input } = args
       const data = await client.query(UPDATE_FAVORITE_MUTATION, { id, input })
-      return JSON.stringify(data, null, 2)
+      return JSON.stringify(enrichFavoriteTargetUrls(data), null, 2)
     },
   },
   {

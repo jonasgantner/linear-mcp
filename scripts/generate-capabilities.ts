@@ -26,6 +26,7 @@ const domainTitles: Record<string, string> = {
   files: 'Files',
   batch: 'Batch Operations',
   templates: 'Templates',
+  metadata: 'Metadata',
 }
 
 function asObject(value: unknown): JsonObject {
@@ -98,7 +99,7 @@ function render(): string {
     '',
     'When starting without recent context, follow this order:',
     '',
-    '1. Pick the workspace from the issue prefix or user request: `SPE-` -> `biz`; `J-` -> `personal`; `JON-` or disposable live tests -> `jonas-test-workspace`/`test`.',
+    '1. Pick the workspace from the issue prefix or user request: `SPE-` -> `biz`; `J-` -> `personal`; `TEST-` or disposable live tests -> `test`.',
     '2. Query live IDs before writing. Use names only for search/discovery; write calls usually need UUIDs.',
     '3. Prefer readback after every write. The useful pattern is write -> `get_*`/`list_*` -> assert the changed field.',
     '4. Treat old Linear comments, screenshots, and chat summaries as leads, not source of truth.',
@@ -182,10 +183,11 @@ function render(): string {
     '',
     '## Runtime Notes',
     '',
-    '- `workspace` selects `biz`, `personal`, `test`, or `jonas-test-workspace` where the tool schema exposes it; `biz` is the default.',
-    '- Workspace plan levels: `biz` and `personal` are Basic; `jonas-test-workspace` is Free.',
+    '- `workspace` selects `biz`, `personal`, or `test` where the tool schema exposes it; `biz` is the default.',
+    '- Workspace plan levels: `biz` and `personal` are Basic; `test` is Free.',
     '- Prefer archive/unarchive tools over hard-delete tools except for disposable test records.',
     '- Binary/local file uploads use the file tools. URL/resource cards use attachment tools.',
+    '- Private files are discovered as `get_issue.issue.descriptionAssets`, comment `assets`, or `get_document.document.contentAssets`, then downloaded with `download_file`.',
     '- Workspace-level views omit `teamId` and use shared organization preferences.',
     '- Project statuses, labels, templates, and views are workspace-level unless a tool call explicitly scopes them.',
   )

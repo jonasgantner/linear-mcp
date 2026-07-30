@@ -11,7 +11,7 @@ const LIST_CYCLES_QUERY = `
         id number name description startsAt endsAt completedAt
         progress
         team { id name key }
-        issues { nodes { id identifier title state { name } priority assignee { name } } }
+        issues { nodes { id identifier title url state { name } priority assignee { name } } }
       }
     }
   }

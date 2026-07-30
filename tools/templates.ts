@@ -2,6 +2,11 @@ import type { ToolDef } from './_types.js'
 import { WORKSPACE_PROP } from './_types.js'
 import { resolveWorkspace } from '../workspaces.js'
 import { LinearClient } from '../client.js'
+import {
+  LINEAR_VISUAL_COLOR_DESCRIPTION,
+  LINEAR_VISUAL_ICON_DESCRIPTION,
+  assertValidVisualMetadataInput,
+} from './visualMetadata.js'
 
 const TEMPLATE_FIELDS = `
   id name description type icon color templateData sortOrder archivedAt lastAppliedAt hasFormFields
@@ -180,8 +185,8 @@ export const templateTools: ToolDef[] = [
         type: { type: 'string', description: 'Template type: issue | project | recurringIssue | document | releaseNote' },
         teamId: { type: 'string', description: 'Team UUID (omit for org-wide template — most types require teamId)' },
         description: { type: 'string', description: 'Template description' },
-        icon: { type: 'string', description: 'Linear icon name (e.g. "Health")' },
-        color: { type: 'string', description: 'Color hex (e.g. "#5e6ad2")' },
+        icon: { type: 'string', description: LINEAR_VISUAL_ICON_DESCRIPTION },
+        color: { type: 'string', description: LINEAR_VISUAL_COLOR_DESCRIPTION },
         sortOrder: { type: 'number', description: 'Manual sort order' },
         templateData: {
           description: 'Entity-specific config. Either a JSON-encoded string or a plain object. For recurringIssue, MUST include schedule: { interval, type, startAt }.',
@@ -194,6 +199,7 @@ export const templateTools: ToolDef[] = [
       const client = new LinearClient(ws)
       const { workspace: _, templateData, ...rest } = args
       const input: Record<string, unknown> = { ...rest }
+      assertValidVisualMetadataInput(input)
       const templateObject = rest.type === 'recurringIssue' ? validateRecurringTemplateData(templateData) : templateData
       const serialized = serializeTemplateData(templateObject)
       if (serialized !== undefined) input.templateData = serialized
@@ -212,8 +218,8 @@ export const templateTools: ToolDef[] = [
         name: { type: 'string', description: 'Template name (required)' },
         teamId: { type: 'string', description: 'Team UUID (required for recurring issue templates)' },
         description: { type: 'string', description: 'Template description' },
-        icon: { type: 'string', description: 'Linear icon name (e.g. "Health")' },
-        color: { type: 'string', description: 'Color hex (e.g. "#5e6ad2")' },
+        icon: { type: 'string', description: LINEAR_VISUAL_ICON_DESCRIPTION },
+        color: { type: 'string', description: LINEAR_VISUAL_COLOR_DESCRIPTION },
         sortOrder: { type: 'number', description: 'Manual sort order' },
         title: { type: 'string', description: 'Issue title created by the recurring template (required)' },
         issueDescription: { type: 'string', description: 'Issue description created by the recurring template' },
@@ -254,6 +260,7 @@ export const templateTools: ToolDef[] = [
       const { workspace: _, title: _title, issueDescription: _issueDescription, scheduleInterval: _scheduleInterval, scheduleType: _scheduleType, startAt: _startAt, priority: _priority, estimate: _estimate, assigneeId: _assigneeId, labelIds: _labelIds, projectId: _projectId, stateId: _stateId, dueDate: _dueDate, ...rest } = args
       const templateData = recurringTemplateDataFromArgs(args)
       const input = { ...rest, type: 'recurringIssue', templateData: JSON.stringify(templateData) }
+      assertValidVisualMetadataInput(input)
       const data = await client.query(CREATE_TEMPLATE_MUTATION, { input })
       return JSON.stringify(data, null, 2)
     },
@@ -268,8 +275,8 @@ export const templateTools: ToolDef[] = [
         id: { type: 'string', description: 'Template UUID (required)' },
         name: { type: 'string', description: 'New name' },
         description: { type: 'string', description: 'New description' },
-        icon: { type: 'string', description: 'New Linear icon name (e.g. "Health")' },
-        color: { type: 'string', description: 'New color hex' },
+        icon: { type: 'string', description: LINEAR_VISUAL_ICON_DESCRIPTION },
+        color: { type: 'string', description: LINEAR_VISUAL_COLOR_DESCRIPTION },
         teamId: { type: 'string', description: 'Move/scope template to team UUID' },
         sortOrder: { type: 'number', description: 'Manual sort order' },
         templateData: { description: 'New templateData (object or JSON string)' },
@@ -281,6 +288,7 @@ export const templateTools: ToolDef[] = [
       const client = new LinearClient(ws)
       const { workspace: _, id, templateData, ...rest } = args
       const input: Record<string, unknown> = { ...rest }
+      assertValidVisualMetadataInput(input)
       const serialized = serializeTemplateData(templateData)
       if (serialized !== undefined) input.templateData = serialized
       const data = await client.query(UPDATE_TEMPLATE_MUTATION, { id, input })
@@ -298,8 +306,8 @@ export const templateTools: ToolDef[] = [
         name: { type: 'string', description: 'New template name' },
         teamId: { type: 'string', description: 'Team UUID' },
         description: { type: 'string', description: 'New template description' },
-        icon: { type: 'string', description: 'New Linear icon name' },
-        color: { type: 'string', description: 'New color hex' },
+        icon: { type: 'string', description: LINEAR_VISUAL_ICON_DESCRIPTION },
+        color: { type: 'string', description: LINEAR_VISUAL_COLOR_DESCRIPTION },
         sortOrder: { type: 'number', description: 'Manual sort order' },
         title: { type: 'string', description: 'Issue title created by the recurring template' },
         issueDescription: { type: 'string', description: 'Issue description created by the recurring template' },
@@ -327,6 +335,7 @@ export const templateTools: ToolDef[] = [
       const templateData = recurringTemplateDataFromArgs(args, existing)
       const { workspace: _, id, title: _title, issueDescription: _issueDescription, scheduleInterval: _scheduleInterval, scheduleType: _scheduleType, startAt: _startAt, priority: _priority, estimate: _estimate, assigneeId: _assigneeId, labelIds: _labelIds, projectId: _projectId, stateId: _stateId, dueDate: _dueDate, ...rest } = args
       const input = { ...rest, templateData: JSON.stringify(templateData) }
+      assertValidVisualMetadataInput(input)
       const data = await client.query(UPDATE_TEMPLATE_MUTATION, { id, input })
       return JSON.stringify(data, null, 2)
     },

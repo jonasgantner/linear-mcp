@@ -40,7 +40,7 @@ const surfaces = [
     required: [
       /Fresh-session rule:/,
       /generated `CAPABILITIES\.md` is the human-readable index/,
-      /jonas-test-workspace/,
+      /\| `test` \| Disposable live MCP tests only \| `TEST-` \|/,
     ],
     forbidden: [
       /both workspaces/,

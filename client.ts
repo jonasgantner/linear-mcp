@@ -16,6 +16,7 @@ export class LinearError extends Error {
 }
 
 const GRAPHQL_URL = 'https://api.linear.app/graphql'
+const LINEAR_UPLOAD_HOST = 'uploads.linear.app'
 const lastRequest = new Map<string, number>()
 const MIN_INTERVAL = 250
 
@@ -55,4 +56,37 @@ export class LinearClient {
     }
     return json.data as T
   }
+
+  async fetchFile(url: string): Promise<Response> {
+    const parsed = validateLinearUploadUrl(url)
+    await throttle(this.workspace.name)
+    const res = await fetch(parsed, {
+      method: 'GET',
+      headers: { Authorization: this.workspace.token },
+      redirect: 'error',
+    })
+    if (!res.ok) {
+      throw new LinearError(res.status, 'Private file download failed', this.workspace.name)
+    }
+    return res
+  }
+}
+
+export function validateLinearUploadUrl(url: string): URL {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    throw new Error('Linear file URL must be a valid absolute URL')
+  }
+  if (
+    parsed.protocol !== 'https:'
+    || parsed.hostname !== LINEAR_UPLOAD_HOST
+    || (parsed.port && parsed.port !== '443')
+    || parsed.username
+    || parsed.password
+  ) {
+    throw new Error(`Linear file URL must use https://${LINEAR_UPLOAD_HOST}`)
+  }
+  return parsed
 }

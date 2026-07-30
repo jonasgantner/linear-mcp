@@ -2,6 +2,11 @@ import type { ToolDef } from './_types.js'
 import { WORKSPACE_PROP, PAGINATION_PROPS } from './_types.js'
 import { resolveWorkspace } from '../workspaces.js'
 import { LinearClient } from '../client.js'
+import {
+  LINEAR_VISUAL_COLOR_DESCRIPTION,
+  LINEAR_VISUAL_ICON_DESCRIPTION,
+  assertValidVisualMetadataInput,
+} from './visualMetadata.js'
 
 const VIEW_PREFERENCE_VALUE_FIELDS = `
   layout viewOrdering viewOrderingDirection
@@ -32,16 +37,17 @@ const FACET_READBACK_FIELDS = `
   sourceInitiative { id name slugId url }
   sourceFeedUser { id name }
   sourcePage
-  targetCustomView { id name modelName }
+  targetCustomView { id name slugId modelName organization { id name urlKey } team { id name key } }
 `
 
 const CUSTOM_VIEW_READBACK_FIELDS = `
-  id name description icon color shared modelName
+  id name slugId description icon color shared modelName
+  organization { id name urlKey }
   owner { id name }
   team { id name key }
   facet { ${FACET_READBACK_FIELDS} }
-  projects(first: 50) { nodes { id name } }
-  initiatives(first: 50) { nodes { id name } }
+  projects(first: 50) { nodes { id name url } }
+  initiatives(first: 50) { nodes { id name url } }
   filterData
   projectFilterData
   initiativeFilterData
@@ -235,6 +241,10 @@ const VIEW_SCHEMA_EXPECTED_FIELDS: Record<string, string[]> = {
     'or',
   ],
   CustomView: [
+    'id',
+    'name',
+    'slugId',
+    'organization',
     'modelName',
     'facet',
     'team',
@@ -315,6 +325,60 @@ function normalizeViewPreferences(preferences: unknown): unknown {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function nestedRecord(value: Record<string, unknown>, key: string): Record<string, unknown> | null {
+  const child = value[key]
+  return isRecord(child) ? child : null
+}
+
+function nestedString(value: Record<string, unknown> | null | undefined, key: string): string | undefined {
+  const child = value?.[key]
+  return typeof child === 'string' && child.trim() ? child : undefined
+}
+
+function computedCustomViewUrl(view: Record<string, unknown>): string | undefined {
+  const id = nestedString(view, 'id')
+  if (!id) return undefined
+
+  const facet = nestedRecord(view, 'facet')
+  const organization = nestedRecord(view, 'organization') ?? nestedRecord(facet ?? {}, 'sourceOrganization')
+  const team = nestedRecord(view, 'team') ?? nestedRecord(facet ?? {}, 'sourceTeam')
+  const organizationKey = nestedString(organization, 'urlKey')
+  const teamKey = nestedString(team, 'key')
+  if (!organizationKey) return undefined
+  if (teamKey) return `https://linear.app/${organizationKey}/team/${teamKey}/view/${id}`
+  return `https://linear.app/${organizationKey}/view/${id}`
+}
+
+function looksLikeCustomView(value: Record<string, unknown>): boolean {
+  return typeof value.id === 'string'
+    && typeof value.name === 'string'
+    && (
+      typeof value.modelName === 'string'
+      || Object.prototype.hasOwnProperty.call(value, 'filterData')
+      || Object.prototype.hasOwnProperty.call(value, 'projectFilterData')
+      || Object.prototype.hasOwnProperty.call(value, 'initiativeFilterData')
+      || Object.prototype.hasOwnProperty.call(value, 'feedItemFilterData')
+    )
+}
+
+function enrichCustomViewUrls<T>(value: T): T {
+  if (Array.isArray(value)) {
+    for (const item of value) enrichCustomViewUrls(item)
+    return value
+  }
+  if (!isRecord(value)) return value
+
+  if (looksLikeCustomView(value) && typeof value.url !== 'string') {
+    const url = computedCustomViewUrl(value)
+    if (url) value.url = url
+  }
+
+  for (const child of Object.values(value)) {
+    enrichCustomViewUrls(child)
+  }
+  return value
 }
 
 function stateTypeEqValue(value: unknown): string | null {
@@ -421,6 +485,7 @@ function normalizeCustomViewFilter(filter: unknown): unknown {
 
 function normalizeViewInput(args: Record<string, unknown>): Record<string, unknown> {
   const input = { ...args }
+  assertValidVisualMetadataInput(input)
   if (Object.prototype.hasOwnProperty.call(input, 'filterData')) {
     input.filterData = normalizeCustomViewFilter(withoutTeamFilters(input.filterData))
   }
@@ -469,7 +534,7 @@ function customViewsFromFacets(parentKey: 'project' | 'initiative', parent: Reco
     })
     .filter(Boolean)
 
-  return {
+  return enrichCustomViewUrls({
     [parentKey]: parent
       ? Object.fromEntries(Object.entries(parent).filter(([key]) => key !== 'facets'))
       : null,
@@ -477,7 +542,7 @@ function customViewsFromFacets(parentKey: 'project' | 'initiative', parent: Reco
       pageInfo: { hasNextPage: false, endCursor: null },
       nodes,
     },
-  }
+  })
 }
 
 export const viewTools: ToolDef[] = [
@@ -529,7 +594,7 @@ export const viewTools: ToolDef[] = [
         first: (args.first as number) || 50,
         after: args.after as string | undefined,
       })
-      return JSON.stringify(data, null, 2)
+      return JSON.stringify(enrichCustomViewUrls(data), null, 2)
     },
   },
   {
@@ -547,7 +612,7 @@ export const viewTools: ToolDef[] = [
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
       const data = await client.query(GET_VIEW_QUERY, { id: args.id })
-      return JSON.stringify(data, null, 2)
+      return JSON.stringify(enrichCustomViewUrls(data), null, 2)
     },
   },
   {
@@ -562,12 +627,12 @@ export const viewTools: ToolDef[] = [
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
       const data = await checkViewSchemaDrift(client)
-      return JSON.stringify(data, null, 2)
+      return JSON.stringify(enrichCustomViewUrls(data), null, 2)
     },
   },
   {
     name: 'create_view',
-    description: 'Create a saved custom view (filter). Returns full custom-view readback including owner/team/facet, model type, filters, preferences, and timestamps. Omit teamId for workspace-level issue views; pass teamId only when you intentionally need a team-scoped issue view. Linear public GraphQL currently accepts projectId/initiativeId but does not create the UI project/initiative tab facet; use list_views with projectId/initiativeId or get_view.facet to read UI-created scoped tabs. Do not put team in filterData because Linear renders that as a non-editable raw filter; this tool strips team filters from filterData. Use filterData for editable issue filters and projectFilterData for project views. For GUI-friendly project views, this tool strips project status filters from projectFilterData; use projectGrouping/display preferences instead. The tool normalizes common unsafe shapes like state.type.eq. Icons accept Linear icon names such as "Health", "Rocket", or "Briefcase"; colors use hex.',
+    description: 'Create a saved custom view (filter). Returns full custom-view readback including owner/team/facet, model type, filters, preferences, and timestamps. Omit teamId for workspace-level issue views; pass teamId only when you intentionally need a team-scoped issue view. Linear public GraphQL currently accepts projectId/initiativeId but does not create the UI project/initiative tab facet; use list_views with projectId/initiativeId or get_view.facet to read UI-created scoped tabs. Do not put team in filterData because Linear renders that as a non-editable raw filter; this tool strips team filters from filterData. Use filterData for editable issue filters and projectFilterData for project views. For GUI-friendly project views, this tool strips project status filters from projectFilterData; use projectGrouping/display preferences instead. The tool normalizes common unsafe shapes like state.type.eq. Icons use decorative PascalCase names or emoji colon shortcodes; colors use hex.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -575,8 +640,8 @@ export const viewTools: ToolDef[] = [
         id: { type: 'string', description: 'Optional client-generated custom view UUID' },
         name: { type: 'string', description: 'View name (required)' },
         description: { type: 'string', description: 'View description' },
-        icon: { type: 'string', description: 'Linear icon name (e.g. "Health", "Rocket", "Briefcase")' },
-        color: { type: 'string', description: 'Color hex (e.g. "#5e6ad2")' },
+        icon: { type: 'string', description: LINEAR_VISUAL_ICON_DESCRIPTION },
+        color: { type: 'string', description: LINEAR_VISUAL_COLOR_DESCRIPTION },
         teamId: { type: 'string', description: 'Optional team UUID for intentionally team-scoped issue views. Omit for workspace-level views.' },
         projectId: { type: 'string', description: 'Project UUID accepted by Linear CustomViewCreateInput, but currently does not create the UI project tab facet on public GraphQL readback.' },
         initiativeId: { type: 'string', description: 'Initiative UUID accepted by Linear CustomViewCreateInput, but currently does not create the UI initiative tab facet on public GraphQL readback.' },
@@ -684,12 +749,12 @@ export const viewTools: ToolDef[] = [
       const { workspace: _, ...rawInput } = args
       const input = normalizeViewInput(rawInput)
       const data = await client.query(CREATE_VIEW_MUTATION, { input })
-      return JSON.stringify(data, null, 2)
+      return JSON.stringify(enrichCustomViewUrls(data), null, 2)
     },
   },
   {
     name: 'update_view',
-    description: 'Update a custom view, including filters and visual metadata. Returns full custom-view readback including owner/team/facet, model type, filters, preferences, and timestamps. Linear public GraphQL currently accepts projectId/initiativeId but does not create or move the UI project/initiative tab facet; check get_view.facet for real scoped-tab attachment. Icons accept Linear icon names; colors use hex.',
+    description: 'Update a custom view, including filters and visual metadata. Returns full custom-view readback including owner/team/facet, model type, filters, preferences, and timestamps. Linear public GraphQL currently accepts projectId/initiativeId but does not create or move the UI project/initiative tab facet; check get_view.facet for real scoped-tab attachment. Icons use decorative PascalCase names or emoji colon shortcodes; colors use hex.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -697,8 +762,8 @@ export const viewTools: ToolDef[] = [
         id: { type: 'string', description: 'Custom view UUID (required)' },
         name: { type: 'string', description: 'New name' },
         description: { type: 'string', description: 'New description' },
-        icon: { type: 'string', description: 'New Linear icon name (e.g. "Health", "Rocket", "Briefcase")' },
-        color: { type: 'string', description: 'New color hex (e.g. "#5e6ad2")' },
+        icon: { type: 'string', description: LINEAR_VISUAL_ICON_DESCRIPTION },
+        color: { type: 'string', description: LINEAR_VISUAL_COLOR_DESCRIPTION },
         teamId: { type: 'string', description: 'Optional team UUID for intentionally team-scoped issue views. Omit for workspace-level views.' },
         projectId: { type: 'string', description: 'Project UUID accepted by Linear CustomViewUpdateInput, but currently does not create or move the UI project tab facet on public GraphQL readback.' },
         initiativeId: { type: 'string', description: 'Initiative UUID accepted by Linear CustomViewUpdateInput, but currently does not create or move the UI initiative tab facet on public GraphQL readback.' },

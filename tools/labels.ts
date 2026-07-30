@@ -2,6 +2,7 @@ import type { ToolDef } from './_types.js'
 import { WORKSPACE_PROP, PAGINATION_PROPS } from './_types.js'
 import { resolveWorkspace } from '../workspaces.js'
 import { LinearClient } from '../client.js'
+import { LINEAR_VISUAL_COLOR_DESCRIPTION, assertValidLinearColor } from './visualMetadata.js'
 
 const LIST_LABELS_QUERY = `
   query ListLabels($filter: IssueLabelFilter, $first: Int, $after: String, $includeArchived: Boolean) {
@@ -203,7 +204,7 @@ export const labelTools: ToolDef[] = [
         ...WORKSPACE_PROP,
         name: { type: 'string', description: 'Label name (required)' },
         description: { type: 'string', description: 'Label description' },
-        color: { type: 'string', description: 'Color hex (e.g. "#5e6ad2")' },
+        color: { type: 'string', description: LINEAR_VISUAL_COLOR_DESCRIPTION },
         isGroup: { type: 'boolean', description: 'True to create a label group (parent)' },
         parentId: { type: 'string', description: 'Parent label UUID (to create a child label)' },
         teamId: { type: 'string', description: 'Team UUID (omit for workspace-wide label)' },
@@ -221,6 +222,7 @@ export const labelTools: ToolDef[] = [
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
       const { workspace: _, replaceTeamLabels, ...input } = args
+      assertValidLinearColor(input.color)
       const data = await client.query(CREATE_ISSUE_LABEL_MUTATION, { input, replaceTeamLabels })
       return JSON.stringify(data, null, 2)
     },
@@ -235,7 +237,7 @@ export const labelTools: ToolDef[] = [
         id: { type: 'string', description: 'Issue label UUID' },
         name: { type: 'string', description: 'New label name' },
         description: { type: 'string', description: 'New label description' },
-        color: { type: 'string', description: 'Color hex (e.g. "#5e6ad2")' },
+        color: { type: 'string', description: LINEAR_VISUAL_COLOR_DESCRIPTION },
         isGroup: { type: 'boolean', description: 'Whether this label is a group label' },
         parentId: { type: 'string', description: 'Parent issue label UUID; set null through raw JSON to clear if Linear accepts it' },
         retiredAt: { type: 'string', description: 'Retirement timestamp; prefer issue_label_retire/issue_label_restore for normal lifecycle' },
@@ -253,6 +255,7 @@ export const labelTools: ToolDef[] = [
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
       const { workspace: _, id, replaceTeamLabels, ...input } = args
+      assertValidLinearColor(input.color)
       const data = await client.query(UPDATE_ISSUE_LABEL_MUTATION, { id, input, replaceTeamLabels })
       return JSON.stringify(data, null, 2)
     },
@@ -314,7 +317,7 @@ export const labelTools: ToolDef[] = [
         ...WORKSPACE_PROP,
         name: { type: 'string', description: 'Label name (required)' },
         description: { type: 'string', description: 'Label description' },
-        color: { type: 'string', description: 'Color hex (e.g. "#5e6ad2")' },
+        color: { type: 'string', description: LINEAR_VISUAL_COLOR_DESCRIPTION },
         isGroup: { type: 'boolean', description: 'True to create a label group (parent)' },
         parentId: { type: 'string', description: 'Parent label UUID (to create a child label)' },
       },
@@ -330,6 +333,7 @@ export const labelTools: ToolDef[] = [
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
       const { workspace: _, ...input } = args
+      assertValidLinearColor(input.color)
       const data = await client.query(CREATE_PROJECT_LABEL_MUTATION, { input })
       return JSON.stringify(data, null, 2)
     },
@@ -344,7 +348,7 @@ export const labelTools: ToolDef[] = [
         id: { type: 'string', description: 'Project label UUID' },
         name: { type: 'string', description: 'New label name' },
         description: { type: 'string', description: 'New label description' },
-        color: { type: 'string', description: 'Color hex (e.g. "#5e6ad2")' },
+        color: { type: 'string', description: LINEAR_VISUAL_COLOR_DESCRIPTION },
         isGroup: { type: 'boolean', description: 'Whether this label is a group label' },
         parentId: { type: 'string', description: 'Parent project label UUID; set null through raw JSON to clear if Linear accepts it' },
         retiredAt: { type: 'string', description: 'Retirement timestamp; prefer project_label_retire/project_label_restore for normal lifecycle' },
@@ -361,6 +365,7 @@ export const labelTools: ToolDef[] = [
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
       const { workspace: _, id, ...input } = args
+      assertValidLinearColor(input.color)
       const data = await client.query(UPDATE_PROJECT_LABEL_MUTATION, { id, input })
       return JSON.stringify(data, null, 2)
     },

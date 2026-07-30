@@ -10,15 +10,28 @@ const NOTIFICATION_FIELDS = `
   user { id name email }
   ... on IssueNotification {
     issueId
-    issue { id identifier title state { name } priority assignee { name } }
-    comment { id body }
+    issue { id identifier title url state { name } priority assignee { name } }
+    comment { id body url }
+    parentComment { id body url }
     team { id name key }
     subscriptions { id active subscriber { id name email } }
   }
   ... on ProjectNotification {
     projectId
     projectUpdateId
-    project { id name }
+    project { id name url }
+    projectUpdate { id body health url }
+    comment { id body url }
+    parentComment { id body url }
+    actor { id name }
+  }
+  ... on InitiativeNotification {
+    initiativeId
+    initiativeUpdateId
+    initiative { id name url status priority prioritySortOrder }
+    initiativeUpdate { id body health url }
+    comment { id body url }
+    parentComment { id body url }
     actor { id name }
   }
 `

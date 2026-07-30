@@ -43,6 +43,51 @@ function request(method, params = {}) {
   })
 }
 
+function assertSearchIssuesOrderBySchema(tools) {
+  const searchIssues = tools.find(tool => tool.name === 'search_issues')
+  const orderBy = searchIssues?.inputSchema?.properties?.orderBy
+  const expected = ['updatedAt', 'createdAt']
+  const actual = orderBy?.enum
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new Error(`search_issues.orderBy enum drift: expected ${expected.join(', ')}, got ${JSON.stringify(actual)}`)
+  }
+}
+
+function assertToolAnnotations(tools) {
+  const missing = tools.filter(tool => !tool.annotations).map(tool => tool.name)
+  if (missing.length) {
+    throw new Error(`tool annotations missing for ${missing.length} tool(s): ${missing.slice(0, 12).join(', ')}`)
+  }
+
+  const expectedByTool = {
+    list_initiatives: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    update_issue: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    delete_issue: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  }
+
+  for (const [name, expected] of Object.entries(expectedByTool)) {
+    const actual = tools.find(tool => tool.name === name)?.annotations
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+      throw new Error(`${name} annotations drift: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`)
+    }
+  }
+}
+
 child.stdout.on('data', chunk => {
   stdout += chunk.toString('utf8')
   let index
@@ -78,7 +123,10 @@ try {
   })
   send({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} })
   const tools = await request('tools/list')
-  const names = (tools.tools ?? []).map(tool => tool.name)
+  const toolList = tools.tools ?? []
+  assertSearchIssuesOrderBySchema(toolList)
+  assertToolAnnotations(toolList)
+  const names = toolList.map(tool => tool.name)
   const output = {
     server: init.serverInfo?.name ?? null,
     protocolVersion: init.protocolVersion,

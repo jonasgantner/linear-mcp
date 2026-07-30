@@ -13,7 +13,7 @@ const BATCH_CREATE_MUTATION = `
         state { name }
         assignee { name }
         priority
-        parent { identifier }
+        parent { id identifier title url }
       }
     }
   }

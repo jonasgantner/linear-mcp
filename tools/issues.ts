@@ -2,7 +2,9 @@ import type { ToolDef } from './_types.js'
 import { WORKSPACE_PROP, PAGINATION_PROPS } from './_types.js'
 import { resolveWorkspace } from '../workspaces.js'
 import { LinearClient } from '../client.js'
-import { COMMENT_READ_FIELDS } from './commentRead.js'
+import { DEFAULT_EMBEDDED_COMMENT_LIMIT, listFullComments } from './commentRead.js'
+import { DOCUMENT_SUMMARY_FIELDS } from './documents.js'
+import { extractFileAssets, type FileAsset } from './fileAssets.js'
 
 const ISSUE_FIELDS = `
   id identifier title description url priority priorityLabel estimate
@@ -11,10 +13,10 @@ const ISSUE_FIELDS = `
   state { id name type color }
   assignee { id name email }
   team { id name key }
-  project { id name }
+  project { id name url }
   projectMilestone { id name targetDate }
   cycle { id number name startsAt endsAt }
-  parent { id identifier title }
+  parent { id identifier title url }
   labels { nodes { id name color } }
   createdAt updatedAt completedAt canceledAt
 `
@@ -35,6 +37,8 @@ const SEARCH_ISSUES_QUERY = `
   }
 `
 
+const ISSUE_ORDER_BY_VALUES = ['updatedAt', 'createdAt'] as const
+
 const GET_ISSUE_QUERY = `
   query GetIssue($id: String!) {
     issue(id: $id) {
@@ -42,30 +46,11 @@ const GET_ISSUE_QUERY = `
       ${ISSUE_SUBSCRIBER_FIELDS}
       descriptionState
       documentContent { id contentState updatedAt }
-      children { nodes { id identifier title state { name } priority } }
+      documents { nodes { ${DOCUMENT_SUMMARY_FIELDS} } }
+      children { nodes { id identifier title url state { name } priority } }
       attachments { nodes { id title subtitle url sourceType metadata createdAt } }
-      relations { nodes { id type relatedIssue { id identifier title } } }
-      inverseRelations { nodes { id type issue { id identifier title } } }
-    }
-  }
-`
-
-const GET_ISSUE_COMMENTS_QUERY = `
-  query GetIssueComments($issueId: ID!) {
-    comments(filter: { issue: { id: { eq: $issueId } } }, first: 25) {
-      nodes {
-        ${COMMENT_READ_FIELDS}
-      }
-    }
-  }
-`
-
-const GET_DOCUMENT_CONTENT_COMMENTS_QUERY = `
-  query GetDocumentContentComments($documentContentId: ID!) {
-    comments(filter: { documentContent: { id: { eq: $documentContentId } } }, first: 25) {
-      nodes {
-        ${COMMENT_READ_FIELDS}
-      }
+      relations { nodes { id type relatedIssue { id identifier title url } } }
+      inverseRelations { nodes { id type issue { id identifier title url } } }
     }
   }
 `
@@ -97,7 +82,7 @@ const UPDATE_ISSUE_MUTATION = `
 const ISSUE_SUBSCRIBERS_QUERY = `
   query IssueSubscribers($id: String!, $first: Int, $after: String) {
     issue(id: $id) {
-      id identifier title
+      id identifier title url
       subscribers(first: $first, after: $after) {
         pageInfo { hasNextPage endCursor }
         nodes { id name email active }
@@ -173,6 +158,14 @@ function buildIssueFilter(args: Record<string, unknown>): Record<string, unknown
   return filter
 }
 
+function resolveIssueOrderBy(orderBy: unknown): (typeof ISSUE_ORDER_BY_VALUES)[number] {
+  const value = orderBy ?? 'updatedAt'
+  if (ISSUE_ORDER_BY_VALUES.includes(value as (typeof ISSUE_ORDER_BY_VALUES)[number])) {
+    return value as (typeof ISSUE_ORDER_BY_VALUES)[number]
+  }
+  throw new Error(`search_issues.orderBy must be one of: ${ISSUE_ORDER_BY_VALUES.join(', ')}`)
+}
+
 export const issueTools: ToolDef[] = [
   {
     name: 'search_issues',
@@ -190,7 +183,7 @@ export const issueTools: ToolDef[] = [
         query: { type: 'string', description: 'Full-text search in title and description' },
         filter: { type: 'object', description: 'Raw IssueFilter object (overrides convenience params)' },
         ...PAGINATION_PROPS,
-        orderBy: { type: 'string', description: 'Sort: updatedAt (default), createdAt, priority' },
+        orderBy: { type: 'string', enum: [...ISSUE_ORDER_BY_VALUES], description: 'Sort: updatedAt (default) or createdAt' },
       },
     },
     async handler(args) {
@@ -201,7 +194,7 @@ export const issueTools: ToolDef[] = [
         filter: Object.keys(filter).length > 0 ? filter : undefined,
         first: (args.first as number) || 50,
         after: args.after as string | undefined,
-        orderBy: args.orderBy || 'updatedAt',
+        orderBy: resolveIssueOrderBy(args.orderBy),
       }
       const data = await client.query(SEARCH_ISSUES_QUERY, variables)
       return JSON.stringify(data, null, 2)
@@ -209,12 +202,13 @@ export const issueTools: ToolDef[] = [
   },
   {
     name: 'get_issue',
-    description: 'Get a single issue by ID or identifier (e.g. "SPE-123"). Returns full details including comments, children, and relations.',
+    description: 'Get a single issue by ID or identifier (e.g. "SPE-123"). Returns structured descriptionAssets, full comment assets/metadata, linked documents, children, and relations.',
     inputSchema: {
       type: 'object',
       properties: {
         ...WORKSPACE_PROP,
         id: { type: 'string', description: 'Issue UUID or identifier (e.g. "SPE-123")' },
+        commentsFirst: { type: 'integer', description: 'Requested total comments per issue-comment surface. Default 100, maximum 250; the MCP internally chunks Linear requests.' },
       },
       required: ['id'],
     },
@@ -222,14 +216,29 @@ export const issueTools: ToolDef[] = [
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
       const data = await client.query<{
-        issue: { id: string; comments?: unknown; documentContent?: { id: string } | null; documentContentComments?: unknown }
+        issue: {
+          id: string
+          description?: string | null
+          descriptionAssets?: FileAsset[]
+          comments?: unknown
+          documentContent?: { id: string } | null
+          documentContentComments?: unknown
+        }
       }>(GET_ISSUE_QUERY, { id: args.id })
-      const issueComments = await client.query(GET_ISSUE_COMMENTS_QUERY, { issueId: data.issue.id })
-      data.issue.comments = (issueComments as { comments: unknown }).comments
+      data.issue.descriptionAssets = extractFileAssets(data.issue.description)
+      const commentsFirst = (args.commentsFirst as number | undefined) ?? DEFAULT_EMBEDDED_COMMENT_LIMIT
+      const issueComments = await listFullComments(client, {
+        filter: { issue: { id: { eq: data.issue.id } } },
+        first: commentsFirst,
+      }, DEFAULT_EMBEDDED_COMMENT_LIMIT)
+      data.issue.comments = issueComments.comments
       const documentContentId = data.issue.documentContent?.id
       if (documentContentId) {
-        const comments = await client.query(GET_DOCUMENT_CONTENT_COMMENTS_QUERY, { documentContentId })
-        data.issue.documentContentComments = (comments as { comments: unknown }).comments
+        const comments = await listFullComments(client, {
+          filter: { documentContent: { id: { eq: documentContentId } } },
+          first: commentsFirst,
+        }, DEFAULT_EMBEDDED_COMMENT_LIMIT)
+        data.issue.documentContentComments = comments.comments
       }
       return JSON.stringify(data, null, 2)
     },

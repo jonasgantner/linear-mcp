@@ -3,6 +3,7 @@ import {
   ListToolsRequestSchema,
   CallToolRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js'
+import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js'
 import type { ToolDef, ToolDomain, ToolSideEffect } from './_types.js'
 import { userTools } from './users.js'
 import { teamTools } from './teams.js'
@@ -22,6 +23,7 @@ import { fileTools } from './files.js'
 import { attachmentTools } from './attachments.js'
 import { batchTools } from './batch.js'
 import { templateTools } from './templates.js'
+import { visualMetadataTools } from './visualMetadata.js'
 
 type ToolGroup = {
   domain: ToolDomain
@@ -52,6 +54,7 @@ const rawToolGroups: ToolGroup[] = [
   { domain: 'attachments', sourceFile: 'tools/attachments.ts', tools: attachmentTools },
   { domain: 'batch', sourceFile: 'tools/batch.ts', tools: batchTools },
   { domain: 'templates', sourceFile: 'tools/templates.ts', tools: templateTools },
+  { domain: 'metadata', sourceFile: 'tools/visualMetadata.ts', tools: visualMetadataTools },
 ]
 
 function inferSideEffect(name: string): ToolSideEffect {
@@ -59,6 +62,40 @@ function inferSideEffect(name: string): ToolSideEffect {
   if (name === 'upload_file' || name === 'upload_image_from_url' || name.endsWith('_with_files') || name.startsWith('append_')) return 'upload'
   if (name.startsWith('delete_')) return 'delete'
   return 'write'
+}
+
+function annotationsForSideEffect(sideEffect: ToolSideEffect | undefined): ToolAnnotations {
+  switch (sideEffect) {
+    case 'read':
+      return {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      }
+    case 'delete':
+      return {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: false,
+      }
+    case 'upload':
+      return {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      }
+    case 'write':
+    default:
+      return {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      }
+  }
 }
 
 function withMetadata(group: ToolGroup): ToolDef[] {
@@ -109,6 +146,7 @@ export function registerTools(server: Server): void {
       name: t.name,
       description: t.description,
       inputSchema: t.inputSchema,
+      annotations: annotationsForSideEffect(t.sideEffect),
     })),
   }))
 

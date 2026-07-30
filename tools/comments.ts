@@ -4,23 +4,18 @@ import { resolveWorkspace } from '../workspaces.js'
 import { LinearClient } from '../client.js'
 import { COMMENT_TARGET_PROPS, buildCommentCreateInput } from './commentTargets.js'
 import { prepareInlineAnchor } from './inlineAnchors.js'
-import { COMMENT_READ_FIELDS, buildCommentFilter } from './commentRead.js'
+import {
+  COMMENT_READ_FIELDS,
+  DEFAULT_COMMENT_LIMIT,
+  buildCommentFilter,
+  hydrateCommentChildPages,
+  listFullComments,
+} from './commentRead.js'
 
 const GET_COMMENT_QUERY = `
   query GetComment($id: String!) {
     comment(id: $id) {
       ${COMMENT_READ_FIELDS}
-    }
-  }
-`
-
-const LIST_COMMENTS_QUERY = `
-  query ListComments($filter: CommentFilter, $first: Int, $after: String, $includeArchived: Boolean, $orderBy: PaginationOrderBy) {
-    comments(filter: $filter, first: $first, after: $after, includeArchived: $includeArchived, orderBy: $orderBy) {
-      pageInfo { hasNextPage endCursor }
-      nodes {
-        ${COMMENT_READ_FIELDS}
-      }
     }
   }
 `
@@ -51,6 +46,12 @@ const COMMENT_SCHEMA_EXPECTED: Record<string, string[]> = {
     'parent',
     'resolvedAt',
     'resolvingUser',
+    'botActor',
+    'externalUser',
+    'onBehalfOf',
+    'reactionData',
+    'hideInLinear',
+    'threadSummary',
   ],
   CommentFilter: [
     'id',
@@ -118,7 +119,7 @@ const UPDATE_COMMENT_MUTATION = `
   mutation UpdateComment($id: String!, $input: CommentUpdateInput!) {
     commentUpdate(id: $id, input: $input) {
       success
-      comment { id body user { name } updatedAt }
+      comment { id body url user { name } updatedAt }
     }
   }
 `
@@ -133,7 +134,7 @@ const RESOLVE_COMMENT_MUTATION = `
   mutation ResolveComment($id: String!) {
     commentResolve(id: $id) {
       success
-      comment { id resolvedAt resolvingUser { name } }
+      comment { id url resolvedAt resolvingUser { name } }
     }
   }
 `
@@ -142,7 +143,7 @@ const UNRESOLVE_COMMENT_MUTATION = `
   mutation UnresolveComment($id: String!) {
     commentUnresolve(id: $id) {
       success
-      comment { id }
+      comment { id url }
     }
   }
 `
@@ -168,13 +169,14 @@ export const commentTools: ToolDef[] = [
     async handler(args) {
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
-      const data = await client.query(GET_COMMENT_QUERY, { id: args.id })
+      const data = await client.query<{ comment: Record<string, unknown> }>(GET_COMMENT_QUERY, { id: args.id })
+      await hydrateCommentChildPages(client, [data.comment])
       return JSON.stringify(data, null, 2)
     },
   },
   {
     name: 'list_comments',
-    description: 'List comments with full thread readback. Filter by issueId, issueDescriptionId, documentId, documentContentId, projectId, initiativeId, projectUpdateId, parentId, projectContentId, initiativeContentId, query, or raw CommentFilter.',
+    description: 'List full comments with parent, child reply, actor metadata, reactionData, thread summary, and structured asset readback. Internally paginates to avoid Linear query-complexity limits. Filter by issueId, issueDescriptionId, documentId, documentContentId, projectId, initiativeId, projectUpdateId, parentId, projectContentId, initiativeContentId, query, or raw CommentFilter.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -191,7 +193,7 @@ export const commentTools: ToolDef[] = [
         initiativeContentId: { type: 'string', description: 'Initiative UUID for comments on initiative rich content' },
         query: { type: 'string', description: 'Case-insensitive body search' },
         filter: { type: 'object', description: 'Raw CommentFilter object. Overrides convenience filters.' },
-        first: { type: 'integer', maximum: 25, description: 'Number of comments to return per page. Default 25; use pagination for more.' },
+        first: { type: 'integer', description: 'Requested total comments to return. Default 25, maximum 250; the MCP internally chunks Linear requests.' },
         after: { type: 'string', description: 'Cursor for next page' },
         includeArchived: { type: 'boolean', description: 'Include archived/deleted comments' },
         orderBy: { type: 'string', description: 'Pagination order, usually createdAt or updatedAt' },
@@ -215,13 +217,13 @@ export const commentTools: ToolDef[] = [
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
       const filter = await buildCommentFilter(client, args)
-      const data = await client.query(LIST_COMMENTS_QUERY, {
+      const data = await listFullComments(client, {
         filter: Object.keys(filter).length > 0 ? filter : undefined,
-        first: (args.first as number) || 25,
+        first: args.first as number | undefined,
         after: args.after as string | undefined,
         includeArchived: args.includeArchived as boolean | undefined,
         orderBy: args.orderBy as string | undefined,
-      })
+      }, DEFAULT_COMMENT_LIMIT)
       return JSON.stringify(data, null, 2)
     },
   },

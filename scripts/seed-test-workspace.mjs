@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
 const DEFAULT_COMMAND = '/Users/jonas/.agents/mcp/wrappers/linear.sh'
-const WORKSPACE = argValue('--workspace') ?? 'jonas-test-workspace'
+const WORKSPACE = argValue('--workspace') ?? 'test'
 const command = argValue('--command') ?? DEFAULT_COMMAND
 const runId = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)
 const prefix = argValue('--prefix') ?? `MCP Lab ${runId}`

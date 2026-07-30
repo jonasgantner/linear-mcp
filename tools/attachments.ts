@@ -6,8 +6,22 @@ import { LinearClient } from '../client.js'
 const ATTACHMENT_FIELDS = `
   id title subtitle url sourceType source metadata
   creator { name }
-  issue { id identifier }
+  issue { id identifier title url }
   createdAt updatedAt
+`
+
+const GET_ATTACHMENT_QUERY = `
+  query GetAttachment($id: String!) {
+    attachment(id: $id) { ${ATTACHMENT_FIELDS} }
+  }
+`
+
+const FIND_ATTACHMENTS_BY_URL_QUERY = `
+  query FindAttachmentsByUrl($url: String!) {
+    attachmentsForURL(url: $url) {
+      nodes { ${ATTACHMENT_FIELDS} }
+    }
+  }
 `
 
 const CREATE_ATTACHMENT_MUTATION = `
@@ -53,6 +67,44 @@ const LINK_DISCORD_MUTATION = `
 `
 
 export const attachmentTools: ToolDef[] = [
+  {
+    name: 'get_attachment',
+    description: 'Get one external URL attachment card by UUID, including its associated issue and metadata. This does not download binary files.',
+    sideEffect: 'read',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...WORKSPACE_PROP,
+        id: { type: 'string', description: 'Attachment UUID' },
+      },
+      required: ['id'],
+    },
+    async handler(args) {
+      const ws = resolveWorkspace(args.workspace as string | undefined)
+      const client = new LinearClient(ws)
+      const data = await client.query(GET_ATTACHMENT_QUERY, { id: args.id })
+      return JSON.stringify(data, null, 2)
+    },
+  },
+  {
+    name: 'find_attachments_by_url',
+    description: 'Find external URL attachment cards by their exact URL, including associated issues and metadata. This does not search private binary uploads.',
+    sideEffect: 'read',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...WORKSPACE_PROP,
+        url: { type: 'string', description: 'Exact external attachment URL' },
+      },
+      required: ['url'],
+    },
+    async handler(args) {
+      const ws = resolveWorkspace(args.workspace as string | undefined)
+      const client = new LinearClient(ws)
+      const data = await client.query(FIND_ATTACHMENTS_BY_URL_QUERY, { url: args.url })
+      return JSON.stringify(data, null, 2)
+    },
+  },
   {
     name: 'create_attachment',
     description: 'Attach a URL/resource to an issue. Supports optional metadata (JSON), iconUrl, and commentBody (auto-creates a comment on the issue).',

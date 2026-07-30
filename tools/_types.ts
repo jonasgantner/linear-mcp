@@ -17,6 +17,7 @@ export type ToolDomain =
   | 'files'
   | 'batch'
   | 'templates'
+  | 'metadata'
 
 export type ToolSideEffect = 'read' | 'write' | 'delete' | 'upload'
 
@@ -41,7 +42,7 @@ export type ToolDef = {
 export const WORKSPACE_PROP = {
   workspace: {
     type: 'string',
-    description: 'Workspace: biz (default), personal, test, or jonas-test-workspace.',
+    description: 'Workspace: biz (default), personal, or test.',
   },
 } as const
 

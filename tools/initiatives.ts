@@ -2,9 +2,19 @@ import type { ToolDef } from './_types.js'
 import { WORKSPACE_PROP, PAGINATION_PROPS } from './_types.js'
 import { resolveWorkspace } from '../workspaces.js'
 import { LinearClient } from '../client.js'
+import { DOCUMENT_SUMMARY_FIELDS } from './documents.js'
+import {
+  LINEAR_VISUAL_COLOR_DESCRIPTION,
+  LINEAR_VISUAL_ICON_DESCRIPTION,
+  assertValidVisualMetadataInput,
+} from './visualMetadata.js'
+
+const INITIATIVE_STATUS_VALUES = ['Proposed', 'Planned', 'Active', 'Completed', 'Canceled'] as const
+const INITIATIVE_STATUS_DESCRIPTION = 'Status: Proposed, Planned, Active, Completed, or Canceled'
+const INITIATIVE_PRIORITY_DESCRIPTION = '0=none, 1=urgent, 2=high, 3=medium, 4=low'
 
 const INITIATIVE_FIELDS = `
-  id name description content status color icon archivedAt
+  id name description content url status priority prioritySortOrder color icon archivedAt
   targetDate targetDateResolution
   owner { id name }
   createdAt updatedAt
@@ -12,24 +22,37 @@ const INITIATIVE_FIELDS = `
 
 const INITIATIVE_PROJECT_LINK_FIELDS = `
   id sortOrder archivedAt
-  initiative { id name status color icon targetDate }
-  project { id name state progress status { id name type color } }
+  initiative { id name url status priority prioritySortOrder color icon targetDate }
+  project { id name url state progress status { id name type color } }
 `
 
 const INITIATIVE_UPDATE_FIELDS = `
   id body health url archivedAt createdAt updatedAt user { id name }
 `
 
-const LIST_INITIATIVES_QUERY = `
+const LIST_INITIATIVE_FIELDS = `
+  id name description url status priority prioritySortOrder color icon archivedAt
+  targetDate targetDateResolution
+  owner { id name }
+  createdAt updatedAt
+`
+
+const LIST_INITIATIVES_LIGHT_QUERY = `
   query ListInitiatives($first: Int, $after: String) {
     initiatives(first: $first, after: $after) {
       pageInfo { hasNextPage endCursor }
+      nodes { ${LIST_INITIATIVE_FIELDS} }
+    }
+  }
+`
+
+const LIST_INITIATIVES_WITH_PROJECTS_QUERY = `
+  query ListInitiativesWithProjects($first: Int, $after: String) {
+    initiatives(first: $first, after: $after) {
+      pageInfo { hasNextPage endCursor }
       nodes {
-        id name description status color icon archivedAt
-        targetDate targetDateResolution
-        owner { id name }
-        projects { nodes { id name state progress status { id name type color } } }
-        createdAt updatedAt
+        ${LIST_INITIATIVE_FIELDS}
+        projects { nodes { id name url state progress status { id name type color } } }
       }
     }
   }
@@ -40,7 +63,8 @@ const GET_INITIATIVE_QUERY = `
     initiative(id: $id) {
       ${INITIATIVE_FIELDS}
       documentContent { id }
-      projects { nodes { id name state progress status { id name type color } } }
+      projects { nodes { id name url state progress status { id name type color } } }
+      documents { nodes { ${DOCUMENT_SUMMARY_FIELDS} } }
       initiativeUpdates { nodes { ${INITIATIVE_UPDATE_FIELDS} } }
     }
   }
@@ -117,7 +141,7 @@ const FIND_INITIATIVE_PROJECT_LINK_QUERY = `
   query FindInitiativeProjectLink($first: Int, $after: String) {
     initiativeToProjects(first: $first, after: $after) {
       pageInfo { hasNextPage endCursor }
-      nodes { id sortOrder initiative { id name } project { id name } }
+      nodes { id sortOrder initiative { id name url } project { id name url } }
     }
   }
 `
@@ -185,8 +209,8 @@ const DELETE_INITIATIVE_MUTATION = `
 type InitiativeProjectLink = {
   id: string
   sortOrder?: string
-  initiative: { id: string; name?: string }
-  project: { id: string; name?: string }
+  initiative: { id: string; name?: string; url?: string }
+  project: { id: string; name?: string; url?: string }
 }
 
 async function listInitiativeProjectLinks(
@@ -238,12 +262,17 @@ export const initiativeTools: ToolDef[] = [
       properties: {
         ...WORKSPACE_PROP,
         ...PAGINATION_PROPS,
+        includeProjects: {
+          type: 'boolean',
+          description: 'Include linked project summaries. Default false keeps list calls lightweight; use get_initiative for rich detail.',
+        },
       },
     },
     async handler(args) {
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
-      const data = await client.query(LIST_INITIATIVES_QUERY, {
+      const query = args.includeProjects === true ? LIST_INITIATIVES_WITH_PROJECTS_QUERY : LIST_INITIATIVES_LIGHT_QUERY
+      const data = await client.query(query, {
         first: (args.first as number) || 50,
         after: args.after as string | undefined,
       })
@@ -309,10 +338,12 @@ export const initiativeTools: ToolDef[] = [
         name: { type: 'string', description: 'Initiative name (required)' },
         description: { type: 'string', description: 'Short initiative description' },
         content: { type: 'string', description: 'Rich initiative content/body (markdown)' },
-        status: { type: 'string', description: 'Status: Planned, Active, or Completed' },
+        status: { type: 'string', enum: [...INITIATIVE_STATUS_VALUES], description: INITIATIVE_STATUS_DESCRIPTION },
+        priority: { type: 'integer', description: INITIATIVE_PRIORITY_DESCRIPTION },
+        prioritySortOrder: { type: 'number', description: 'Manual priority ordering value. Usually omit and use priority.' },
         ownerId: { type: 'string', description: 'Owner user UUID' },
-        color: { type: 'string', description: 'Color hex (e.g. "#5e6ad2")' },
-        icon: { type: 'string', description: 'Initiative icon. Linear accepts icon names such as "MagicWand" in current smoke coverage.' },
+        color: { type: 'string', description: LINEAR_VISUAL_COLOR_DESCRIPTION },
+        icon: { type: 'string', description: LINEAR_VISUAL_ICON_DESCRIPTION },
         targetDate: { type: 'string', description: 'Target date (YYYY-MM-DD)' },
         targetDateResolution: { type: 'string', description: 'Date resolution for targetDate: month, quarter, halfYear, or year' },
         sortOrder: { type: 'number', description: 'Manual sort order' },
@@ -325,7 +356,8 @@ export const initiativeTools: ToolDef[] = [
         args: {
           workspace: 'personal',
           name: 'MCP Smoke Initiative',
-          status: 'Planned',
+          status: 'Proposed',
+          priority: 3,
           icon: 'MagicWand',
           color: '#5e6ad2',
         },
@@ -335,6 +367,7 @@ export const initiativeTools: ToolDef[] = [
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
       const { workspace: _, ...input } = args
+      assertValidVisualMetadataInput(input)
       const data = await client.query(CREATE_INITIATIVE_MUTATION, { input })
       return JSON.stringify(data, null, 2)
     },
@@ -350,10 +383,12 @@ export const initiativeTools: ToolDef[] = [
         name: { type: 'string', description: 'New name' },
         description: { type: 'string', description: 'Short summary (max 255 chars)' },
         content: { type: 'string', description: 'Rich body/description (markdown, no length limit)' },
-        status: { type: 'string', description: 'Status: Planned, Active, or Completed' },
+        status: { type: 'string', enum: [...INITIATIVE_STATUS_VALUES], description: INITIATIVE_STATUS_DESCRIPTION },
+        priority: { type: 'integer', description: INITIATIVE_PRIORITY_DESCRIPTION },
+        prioritySortOrder: { type: 'number', description: 'Manual priority ordering value. Usually omit and use priority.' },
         ownerId: { type: 'string', description: 'Owner user UUID' },
-        color: { type: 'string', description: 'Color hex' },
-        icon: { type: 'string', description: 'Initiative icon. Linear accepts icon names such as "MagicWand" in current smoke coverage.' },
+        color: { type: 'string', description: LINEAR_VISUAL_COLOR_DESCRIPTION },
+        icon: { type: 'string', description: LINEAR_VISUAL_ICON_DESCRIPTION },
         targetDate: { type: 'string', description: 'Target date (YYYY-MM-DD)' },
         targetDateResolution: { type: 'string', description: 'Date resolution for targetDate: month, quarter, halfYear, or year' },
         sortOrder: { type: 'number', description: 'Manual sort order' },
@@ -369,6 +404,7 @@ export const initiativeTools: ToolDef[] = [
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
       const { workspace: _, id, ...input } = args
+      assertValidVisualMetadataInput(input)
       const data = await client.query(UPDATE_INITIATIVE_MUTATION, { id, input })
       return JSON.stringify(data, null, 2)
     },

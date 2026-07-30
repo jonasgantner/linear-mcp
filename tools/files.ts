@@ -1,11 +1,19 @@
-import { basename, isAbsolute } from 'node:path'
-import { readFile, stat } from 'node:fs/promises'
+import { createHash, randomUUID } from 'node:crypto'
+import { basename, dirname, isAbsolute, join } from 'node:path'
+import { link, open, readFile, rename, stat, unlink } from 'node:fs/promises'
 import type { ToolDef } from './_types.js'
 import { WORKSPACE_PROP } from './_types.js'
 import { resolveWorkspace } from '../workspaces.js'
 import { LinearClient } from '../client.js'
 import { COMMENT_TARGET_PROPS, buildCommentCreateInput } from './commentTargets.js'
 import { prepareInlineAnchor } from './inlineAnchors.js'
+import { DOCUMENT_FULL_FIELDS } from './documents.js'
+import { resolveIssueId } from './commentRead.js'
+import {
+  LINEAR_VISUAL_COLOR_DESCRIPTION,
+  LINEAR_VISUAL_ICON_DESCRIPTION,
+  assertValidVisualMetadataInput,
+} from './visualMetadata.js'
 
 type UploadFileHeader = { key: string; value: string }
 type UploadFile = {
@@ -26,6 +34,18 @@ type UploadResult = {
   assetUrl: string
   markdown: string
   metaData?: unknown
+}
+
+export const MAX_FILE_DOWNLOAD_BYTES = 10 * 1024 * 1024 * 1024
+
+type FileDownloadClient = Pick<LinearClient, 'fetchFile'>
+
+type DownloadResult = {
+  path: string
+  filename: string
+  contentType: string | null
+  size: number
+  sha256: string
 }
 
 const UPLOAD_FILE_MUTATION = `
@@ -65,7 +85,7 @@ const CREATE_COMMENT_MUTATION = `
 
 const GET_ISSUE_DESCRIPTION_QUERY = `
   query GetIssueDescription($id: String!) {
-    issue(id: $id) { id identifier title description }
+    issue(id: $id) { id identifier title url description }
   }
 `
 
@@ -82,14 +102,14 @@ const CREATE_DOCUMENT_MUTATION = `
   mutation CreateDocument($input: DocumentCreateInput!) {
     documentCreate(input: $input) {
       success
-      document { id title icon color url }
+      document { ${DOCUMENT_FULL_FIELDS} }
     }
   }
 `
 
 const GET_DOCUMENT_CONTENT_QUERY = `
   query GetDocumentContent($id: String!) {
-    document(id: $id) { id title content }
+    document(id: $id) { id title url content }
   }
 `
 
@@ -104,7 +124,7 @@ const UPDATE_DOCUMENT_MUTATION = `
 
 const GET_PROJECT_CONTENT_QUERY = `
   query GetProjectContent($id: String!) {
-    project(id: $id) { id name content }
+    project(id: $id) { id name url content }
   }
 `
 
@@ -121,14 +141,14 @@ const CREATE_PROJECT_UPDATE_MUTATION = `
   mutation CreateProjectUpdate($input: ProjectUpdateCreateInput!) {
     projectUpdateCreate(input: $input) {
       success
-      projectUpdate { id body health createdAt user { name } }
+      projectUpdate { id body health url createdAt user { name } }
     }
   }
 `
 
 const GET_INITIATIVE_CONTENT_QUERY = `
   query GetInitiativeContent($id: String!) {
-    initiative(id: $id) { id name content }
+    initiative(id: $id) { id name url content }
   }
 `
 
@@ -136,7 +156,7 @@ const UPDATE_INITIATIVE_CONTENT_MUTATION = `
   mutation UpdateInitiativeContent($id: String!, $input: InitiativeUpdateInput!) {
     initiativeUpdate(id: $id, input: $input) {
       success
-      initiative { id name status color }
+      initiative { id name url status priority prioritySortOrder color }
     }
   }
 `
@@ -145,7 +165,7 @@ const CREATE_INITIATIVE_UPDATE_MUTATION = `
   mutation CreateInitiativeUpdate($input: InitiativeUpdateCreateInput!) {
     initiativeUpdateCreate(input: $input) {
       success
-      initiativeUpdate { id body health createdAt }
+      initiativeUpdate { id body health url createdAt }
     }
   }
 `
@@ -293,7 +313,123 @@ function uploadsMarkdown(uploads: UploadResult[]): string {
   return uploads.map(upload => upload.markdown).join('\n\n')
 }
 
+async function destinationExists(path: string): Promise<boolean> {
+  try {
+    await stat(path)
+    return true
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
+    throw error
+  }
+}
+
+async function writeAll(handle: Awaited<ReturnType<typeof open>>, chunk: Uint8Array): Promise<void> {
+  let offset = 0
+  while (offset < chunk.byteLength) {
+    const { bytesWritten } = await handle.write(chunk, offset, chunk.byteLength - offset)
+    if (bytesWritten <= 0) throw new Error('Linear file download stopped while writing to disk')
+    offset += bytesWritten
+  }
+}
+
+export async function downloadFileToPath(
+  client: FileDownloadClient,
+  url: string,
+  destinationPath: string,
+  overwrite = false,
+): Promise<DownloadResult> {
+  if (!isAbsolute(destinationPath)) throw new Error(`Destination path must be absolute: ${destinationPath}`)
+  if (!overwrite && await destinationExists(destinationPath)) {
+    throw new Error(`Destination already exists: ${destinationPath}`)
+  }
+
+  const response = await client.fetchFile(url)
+  const contentLengthHeader = response.headers.get('content-length')
+  const contentLength = contentLengthHeader ? Number(contentLengthHeader) : null
+  if (contentLength !== null && Number.isFinite(contentLength) && contentLength > MAX_FILE_DOWNLOAD_BYTES) {
+    await response.body?.cancel()
+    throw new Error(`Linear file exceeds the 10 GB download limit (${contentLength} bytes)`)
+  }
+  if (!response.body) throw new Error('Linear file download returned no response body')
+
+  const tempPath = join(dirname(destinationPath), `.${basename(destinationPath)}.linear-download-${process.pid}-${randomUUID()}`)
+  const handle = await open(tempPath, 'wx')
+  const hash = createHash('sha256')
+  const reader = response.body.getReader()
+  let size = 0
+  let installed = false
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      size += value.byteLength
+      if (size > MAX_FILE_DOWNLOAD_BYTES) {
+        await reader.cancel()
+        throw new Error('Linear file exceeds the 10 GB download limit while streaming')
+      }
+      hash.update(value)
+      await writeAll(handle, value)
+    }
+    await handle.sync()
+    await handle.close()
+
+    if (overwrite) {
+      await rename(tempPath, destinationPath)
+    } else {
+      await link(tempPath, destinationPath)
+      await unlink(tempPath)
+    }
+    installed = true
+  } finally {
+    await reader.cancel().catch(() => undefined)
+    await handle.close().catch(() => undefined)
+    if (!installed) await unlink(tempPath).catch(() => undefined)
+  }
+
+  return {
+    path: destinationPath,
+    filename: basename(destinationPath),
+    contentType: response.headers.get('content-type'),
+    size,
+    sha256: hash.digest('hex'),
+  }
+}
+
 export const fileTools: ToolDef[] = [
+  {
+    name: 'download_file',
+    description: 'Download or retrieve an embedded private Linear file, such as a PDF, image, or other asset, from an issue description, comment, or document. Pass a https://uploads.linear.app URL from get_issue descriptionAssets/comment assets or get_document contentAssets; saves with workspace authentication to an absolute local path. Streams up to 10 GB, verifies SHA-256, and refuses overwrite by default.',
+    sideEffect: 'write',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...WORKSPACE_PROP,
+        url: { type: 'string', description: 'Private embedded PDF, image, or file URL from a structured Linear asset readback' },
+        destinationPath: { type: 'string', description: 'Absolute local destination path, including filename' },
+        overwrite: { type: 'boolean', description: 'Replace an existing destination atomically. Default false.' },
+      },
+      required: ['url', 'destinationPath'],
+    },
+    examples: [
+      {
+        title: 'Download an embedded issue PDF',
+        description: 'Use the URL returned by get_issue.issue.descriptionAssets and keep the same workspace.',
+        args: { workspace: 'test', url: 'https://uploads.linear.app/path/to/private-file', destinationPath: '/absolute/path/form.pdf' },
+      },
+    ],
+    async handler(args) {
+      const ws = resolveWorkspace(args.workspace as string | undefined)
+      const client = new LinearClient(ws)
+      const download = await downloadFileToPath(
+        client,
+        args.url as string,
+        args.destinationPath as string,
+        (args.overwrite as boolean | undefined) ?? false,
+      )
+      return JSON.stringify({ download }, null, 2)
+    },
+  },
   {
     name: 'upload_file',
     description: 'Upload one local file to Linear private storage using fileUpload + signed PUT. Returns assetUrl and markdown. This is distinct from URL/resource attachments.',
@@ -607,8 +743,9 @@ export const fileTools: ToolDef[] = [
         title: { type: 'string', description: 'Document title' },
         content: { type: 'string', description: 'Optional document markdown before uploaded file links' },
         paths: { type: 'array', items: { type: 'string' }, description: 'Absolute local file paths to upload' },
-        icon: { type: 'string', description: 'Linear icon name (e.g. "Health")' },
-        color: { type: 'string', description: 'Color hex' },
+        icon: { type: 'string', description: LINEAR_VISUAL_ICON_DESCRIPTION },
+        color: { type: 'string', description: LINEAR_VISUAL_COLOR_DESCRIPTION },
+        issueId: { type: 'string', description: 'Link to issue UUID or identifier (e.g. "J-123")' },
         projectId: { type: 'string', description: 'Link to project UUID' },
         initiativeId: { type: 'string', description: 'Link to initiative UUID' },
         teamId: { type: 'string', description: 'Link to team UUID' },
@@ -621,6 +758,7 @@ export const fileTools: ToolDef[] = [
     async handler(args) {
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
+      assertValidVisualMetadataInput(args)
       const uploads = await uploadPaths(client, args.paths as string[], {
         makePublic: args.makePublic as boolean | undefined,
         metaData: args.metaData,
@@ -633,6 +771,7 @@ export const fileTools: ToolDef[] = [
           content,
           icon: args.icon,
           color: args.color,
+          issueId: args.issueId ? await resolveIssueId(client, args.issueId) : args.issueId,
           projectId: args.projectId,
           initiativeId: args.initiativeId,
           teamId: args.teamId,

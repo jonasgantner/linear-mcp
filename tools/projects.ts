@@ -2,6 +2,13 @@ import type { ToolDef } from './_types.js'
 import { WORKSPACE_PROP, PAGINATION_PROPS } from './_types.js'
 import { resolveWorkspace } from '../workspaces.js'
 import { LinearClient } from '../client.js'
+import { DOCUMENT_SUMMARY_FIELDS } from './documents.js'
+import {
+  LINEAR_VISUAL_COLOR_DESCRIPTION,
+  LINEAR_VISUAL_ICON_DESCRIPTION,
+  assertValidLinearColor,
+  assertValidVisualMetadataInput,
+} from './visualMetadata.js'
 
 const PROJECT_STATUS_FIELDS = `
   id name color description position type indefinite archivedAt
@@ -13,10 +20,10 @@ const PROJECT_UPDATE_FIELDS = `
 
 const PROJECT_RELATION_FIELDS = `
   id type anchorType relatedAnchorType archivedAt createdAt updatedAt
-  project { id name }
-  projectMilestone { id name }
-  relatedProject { id name }
-  relatedProjectMilestone { id name }
+  project { id name url }
+  projectMilestone { id name project { id name url } }
+  relatedProject { id name url }
+  relatedProjectMilestone { id name project { id name url } }
   user { id name }
 `
 
@@ -31,7 +38,7 @@ const SEARCH_PROJECTS_QUERY = `
         teams { nodes { id name key } }
         members { nodes { id name } }
         labels { nodes { id name color description isGroup } }
-        initiatives { nodes { id name status color icon targetDate } }
+        initiatives { nodes { id name url status priority prioritySortOrder color icon targetDate } }
       }
     }
   }
@@ -47,10 +54,11 @@ const GET_PROJECT_QUERY = `
       teams { nodes { id name key } }
       members { nodes { id name } }
       labels { nodes { id name color description isGroup } }
-      initiatives { nodes { id name description status color icon targetDate owner { id name } } }
-      initiativeToProjects { nodes { id sortOrder initiative { id name status } } }
-      issues { nodes { id identifier title state { name } priority assignee { name } } }
-      projectMilestones { nodes { id name description targetDate sortOrder } }
+      initiatives { nodes { id name url description status priority prioritySortOrder color icon targetDate owner { id name } } }
+      initiativeToProjects { nodes { id sortOrder initiative { id name url status priority prioritySortOrder } } }
+      issues { nodes { id identifier title url state { name } priority assignee { name } } }
+      documents { nodes { ${DOCUMENT_SUMMARY_FIELDS} } }
+      projectMilestones { nodes { id name description targetDate sortOrder project { id name url } } }
       projectUpdates { nodes { ${PROJECT_UPDATE_FIELDS} } }
       relations { nodes { ${PROJECT_RELATION_FIELDS} } }
       comments {
@@ -236,7 +244,7 @@ const CREATE_PROJECT_MILESTONE_MUTATION = `
   mutation CreateProjectMilestone($input: ProjectMilestoneCreateInput!) {
     projectMilestoneCreate(input: $input) {
       success
-      projectMilestone { id name description targetDate sortOrder }
+      projectMilestone { id name description targetDate sortOrder project { id name url } }
     }
   }
 `
@@ -245,7 +253,7 @@ const UPDATE_PROJECT_MILESTONE_MUTATION = `
   mutation UpdateProjectMilestone($id: String!, $input: ProjectMilestoneUpdateInput!) {
     projectMilestoneUpdate(id: $id, input: $input) {
       success
-      projectMilestone { id name description targetDate }
+      projectMilestone { id name description targetDate project { id name url } }
     }
   }
 `
@@ -286,6 +294,7 @@ async function buildProjectInput(
   args: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   const { workspace: _, state, ...input } = args
+  assertValidVisualMetadataInput(input)
   if (!input.statusId && state) {
     input.statusId = await resolveProjectStatusId(client, state)
   }
@@ -404,8 +413,8 @@ export const projectTools: ToolDef[] = [
         targetDate: { type: 'string', description: 'Target date (ISO 8601)' },
         startDateResolution: { type: 'string', description: 'Date resolution for startDate: month, quarter, halfYear, or year' },
         targetDateResolution: { type: 'string', description: 'Date resolution for targetDate: month, quarter, halfYear, or year' },
-        icon: { type: 'string', description: 'Project icon. Linear accepts icon names such as "Briefcase" in current smoke coverage.' },
-        color: { type: 'string', description: 'Color hex (e.g. "#5e6ad2")' },
+        icon: { type: 'string', description: LINEAR_VISUAL_ICON_DESCRIPTION },
+        color: { type: 'string', description: LINEAR_VISUAL_COLOR_DESCRIPTION },
         priority: { type: 'integer', description: '0=none, 1=urgent, 2=high, 3=medium, 4=low' },
         labelIds: { type: 'array', items: { type: 'string' }, description: 'Project label UUIDs' },
         sortOrder: { type: 'number', description: 'Manual sort order' },
@@ -450,8 +459,8 @@ export const projectTools: ToolDef[] = [
         memberIds: { type: 'array', items: { type: 'string' }, description: 'Member user UUIDs' },
         startDate: { type: 'string', description: 'Start date (YYYY-MM-DD)' },
         targetDate: { type: 'string', description: 'Target date (YYYY-MM-DD)' },
-        icon: { type: 'string', description: 'Project icon. Linear accepts icon names such as "Briefcase" in current smoke coverage.' },
-        color: { type: 'string', description: 'Color hex (e.g. "#5e6ad2")' },
+        icon: { type: 'string', description: LINEAR_VISUAL_ICON_DESCRIPTION },
+        color: { type: 'string', description: LINEAR_VISUAL_COLOR_DESCRIPTION },
         priority: { type: 'integer', description: '0=none, 1=urgent, 2=high, 3=medium, 4=low' },
         labelIds: { type: 'array', items: { type: 'string' }, description: 'Project label UUIDs' },
         teamIds: { type: 'array', items: { type: 'string' }, description: 'Team UUIDs (replaces all teams)' },
@@ -513,7 +522,7 @@ export const projectTools: ToolDef[] = [
         ...WORKSPACE_PROP,
         id: { type: 'string', description: 'Optional client-generated project status UUID' },
         name: { type: 'string', description: 'Status name (max 25 characters)' },
-        color: { type: 'string', description: 'Color hex (e.g. "#5e6ad2")' },
+        color: { type: 'string', description: LINEAR_VISUAL_COLOR_DESCRIPTION },
         description: { type: 'string', description: 'Status description' },
         position: { type: 'number', description: 'Sort position' },
         type: { type: 'string', description: 'Status type: backlog, planned, started, paused, completed, canceled' },
@@ -525,6 +534,7 @@ export const projectTools: ToolDef[] = [
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
       const { workspace: _, ...input } = args
+      assertValidLinearColor(input.color)
       const data = await client.query(CREATE_PROJECT_STATUS_MUTATION, { input })
       return JSON.stringify(data, null, 2)
     },
@@ -538,7 +548,7 @@ export const projectTools: ToolDef[] = [
         ...WORKSPACE_PROP,
         id: { type: 'string', description: 'Project status UUID' },
         name: { type: 'string', description: 'Status name (max 25 characters)' },
-        color: { type: 'string', description: 'Color hex (e.g. "#5e6ad2")' },
+        color: { type: 'string', description: LINEAR_VISUAL_COLOR_DESCRIPTION },
         description: { type: 'string', description: 'Status description' },
         position: { type: 'number', description: 'Sort position' },
         type: { type: 'string', description: 'Status type: backlog, planned, started, paused, completed, canceled' },
@@ -550,6 +560,7 @@ export const projectTools: ToolDef[] = [
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
       const { workspace: _, id, ...input } = args
+      assertValidLinearColor(input.color)
       const data = await client.query(UPDATE_PROJECT_STATUS_MUTATION, { id, input })
       return JSON.stringify(data, null, 2)
     },
