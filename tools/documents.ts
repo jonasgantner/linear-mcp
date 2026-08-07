@@ -1,6 +1,6 @@
 import type { ToolDef } from './_types.js'
 import { WORKSPACE_PROP, PAGINATION_PROPS } from './_types.js'
-import { resolveWorkspace } from '../workspaces.js'
+import { resolveAuthorWorkspace, resolveWorkspace } from '../workspaces.js'
 import { LinearClient } from '../client.js'
 import { DEFAULT_EMBEDDED_COMMENT_LIMIT, listFullComments, resolveIssueId } from './commentRead.js'
 import { extractFileAssets, type FileAsset } from './fileAssets.js'
@@ -33,6 +33,7 @@ const CREATE_DOCUMENT_MUTATION = `
       success
       document {
         ${DOCUMENT_FULL_FIELDS}
+        creator { id name }
       }
     }
   }
@@ -51,7 +52,7 @@ const GET_DOCUMENT_QUERY = `
   query GetDocument($id: String!) {
     document(id: $id) {
       ${DOCUMENT_FULL_FIELDS}
-      creator { name }
+      creator { id name }
       createdAt updatedAt
     }
   }
@@ -63,7 +64,7 @@ const SEARCH_DOCUMENTS_QUERY = `
       pageInfo { hasNextPage endCursor }
       nodes {
         ${DOCUMENT_SUMMARY_FIELDS}
-        creator { name }
+        creator { id name }
         createdAt updatedAt
       }
     }
@@ -190,7 +191,7 @@ export const documentTools: ToolDef[] = [
       },
     ],
     async handler(args) {
-      const ws = resolveWorkspace(args.workspace as string | undefined)
+      const ws = resolveAuthorWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
       const { workspace: _, ...rawInput } = args
       const input = await buildDocumentInput(client, rawInput)

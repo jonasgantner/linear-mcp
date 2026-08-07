@@ -1,6 +1,6 @@
 import type { ToolDef } from './_types.js'
 import { WORKSPACE_PROP } from './_types.js'
-import { resolveWorkspace } from '../workspaces.js'
+import { resolveAuthorWorkspace, resolveWorkspace } from '../workspaces.js'
 import { LinearClient } from '../client.js'
 import { COMMENT_TARGET_PROPS, buildCommentCreateInput } from './commentTargets.js'
 import { prepareInlineAnchor } from './inlineAnchors.js'
@@ -108,7 +108,8 @@ const CREATE_COMMENT_MUTATION = `
       comment {
         id body quotedText url
         issueId projectId initiativeId documentContentId projectUpdateId initiativeUpdateId parentId
-        user { name }
+        user { id name }
+        botActor { id name type subType userDisplayName }
         createdAt
       }
     }
@@ -273,7 +274,7 @@ export const commentTools: ToolDef[] = [
       },
     ],
     async handler(args) {
-      const ws = resolveWorkspace(args.workspace as string | undefined)
+      const ws = resolveAuthorWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
       const input = await buildCommentCreateInput(client, args, args.body as string)
       const inlineAnchor = await prepareInlineAnchor(client, args)

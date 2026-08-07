@@ -7,7 +7,7 @@ It covers issues, projects, initiatives, documents, comments, views, templates, 
 - Active local source: `/Users/jonas/.agents/mcp/servers/linear`
 - Workspaces: `biz`, `personal`, and `test`
 - Plan levels: `biz` and `personal` are Basic; `test` is Free.
-- Auth: `LINEAR_BIZ_TOKEN`, `LINEAR_PERSONAL_TOKEN`, and `LINEAR_TEST_TOKEN`
+- Auth: `LINEAR_BIZ_TOKEN`, `LINEAR_PERSONAL_TOKEN`, and `LINEAR_TEST_TOKEN`; optional test-only app authoring uses `LINEAR_TEST_APP_TOKEN` plus `LINEAR_TEST_WRITE_ACTOR=app`
 - Generated tool reference: [CAPABILITIES.md](CAPABILITIES.md)
 
 ## Agent Usage
@@ -31,6 +31,8 @@ bun run start
 
 The local production launch path uses `/Users/jonas/.agents/mcp/wrappers/linear.sh`, which loads tokens through the neutral MCP wrapper layer. The smoke scripts in `package.json` assume that local control-plane layout.
 
+The normal wrapper explicitly stays human-authored. `/Users/jonas/.agents/mcp/wrappers/linear-app-actor-test.sh` is the isolated pilot launcher: it loads only the human and app tokens for `test`, exposes no `biz` or `personal` credentials, and routes only `create_comment`, `create_comment_with_files`, `create_document`, and `create_document_with_files` through the app author. Reads and all other mutations keep using the human token. App mode fails closed when its token is missing or invalid; it never silently falls back to Jonas.
+
 ## Scripts
 
 ```bash
@@ -39,6 +41,7 @@ bun run verify
 bun run smoke:tools
 bun run smoke:tools:local
 bun run smoke:views
+bun run smoke:app-actor
 bun run smoke:live -- --workspace test --scenario comments
 bun run smoke:live -- --workspace biz --scenario discord --discord-url https://discord.com/channels/<guild>/<channel>/<message>
 bun run seed:test-workspace
@@ -47,6 +50,8 @@ bun run seed:test-workspace
 Use `bun run prepare:repo` before committing source changes. It refreshes the generated capabilities reference, then runs the normal local verification path. GitHub CI runs docs, build, and credential-free tool discovery; live Linear calls still depend on local credentials and the local MCP wrapper layout.
 
 `bun run smoke:live` is opt-in and mutates Linear. It defaults to `test` and also accepts `--workspace personal` or `--workspace biz`. It creates durable sandbox anchors named `Linear MCP Sandbox`, creates disposable fixtures named `MCP Smoke <domain> <timestamp>`, tracks created IDs, and cleans current-run fixtures in `finally`. Supported scenarios are `favorites`, `labels`, `duplicate`, `organize`, `comments`, `views`, `icons`, `notifications`, `subscriptions`, `templates`, `discord`, and `all`. The `discord` scenario is intentionally not part of `all` because it needs `--discord-url` and the biz Discord integration. The script warns about stale `MCP Smoke` fixtures before it starts; review those warnings separately from current-run cleanup results.
+
+`bun run smoke:app-actor` is also opt-in and test-only. It verifies a human-created issue, app-authored comment and reply, app-created linked document, API provenance readback, invalid-token non-creation, and automatic fixture cleanup. Use `-- --keep-fixtures` only when a short-lived UI inspection is needed, then archive the issue and delete/archive the document.
 
 `bun run seed:test-workspace` is also mutating and intentionally durable. It targets `test` by default, creates a fleshed-out MCP capability lab, and writes a local report under `reports/`.
 
