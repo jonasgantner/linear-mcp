@@ -1,7 +1,8 @@
 import { spawn } from 'node:child_process'
+import { requireLiveWriteTarget } from './live-write-guard.mjs'
 
 const DEFAULT_COMMAND = '/Users/jonas/.agents/mcp/wrappers/linear.sh'
-const WORKSPACE = argValue('--workspace') ?? 'test'
+const WORKSPACE = requireLiveWriteTarget()
 const command = argValue('--command') ?? DEFAULT_COMMAND
 const runId = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)
 const TOP_LEVEL_COUNT = Number(argValue('--top-level') ?? 30)
@@ -107,6 +108,8 @@ function nodeFrom(payload, path) {
 async function main() {
   const client = new McpClient(command)
   let issueId = null
+  let operationError = null
+  let cleanupError = null
   const createdTopLevelIds = []
   const createdReplyIds = []
 
@@ -192,12 +195,25 @@ async function main() {
       commentsRead: nodes.length,
       parentChildrenRead: childIds.size,
     }, null, 2))
+  } catch (error) {
+    operationError = error
   } finally {
     if (issueId) {
-      await client.call('archive_issue', { workspace: WORKSPACE, id: issueId }, { allowError: true })
+      try {
+        const result = await client.call('delete_issue', { workspace: WORKSPACE, id: issueId }, { allowError: true })
+        if (result.isError) throw new Error(result.text)
+      } catch (error) {
+        cleanupError = new Error(`Cleanup failed for issue ${issueId}: ${error instanceof Error ? error.message : String(error)}`)
+      }
     }
     await client.close()
   }
+
+  if (operationError && cleanupError) {
+    throw new AggregateError([operationError, cleanupError], 'Live comment smoke and cleanup both failed')
+  }
+  if (operationError) throw operationError
+  if (cleanupError) throw cleanupError
 }
 
 await main()

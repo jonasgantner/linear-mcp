@@ -1,6 +1,6 @@
 import type { ToolDef } from './_types.js'
 import { WORKSPACE_PROP, PAGINATION_PROPS } from './_types.js'
-import { resolveAuthorWorkspace, resolveWorkspace } from '../workspaces.js'
+import { resolveWorkspace } from '../workspaces.js'
 import { LinearClient } from '../client.js'
 import { DEFAULT_EMBEDDED_COMMENT_LIMIT, listFullComments, resolveIssueId } from './commentRead.js'
 import { extractFileAssets, type FileAsset } from './fileAssets.js'
@@ -33,7 +33,6 @@ const CREATE_DOCUMENT_MUTATION = `
       success
       document {
         ${DOCUMENT_FULL_FIELDS}
-        creator { id name }
       }
     }
   }
@@ -52,7 +51,7 @@ const GET_DOCUMENT_QUERY = `
   query GetDocument($id: String!) {
     document(id: $id) {
       ${DOCUMENT_FULL_FIELDS}
-      creator { id name }
+      creator { name }
       createdAt updatedAt
     }
   }
@@ -64,7 +63,7 @@ const SEARCH_DOCUMENTS_QUERY = `
       pageInfo { hasNextPage endCursor }
       nodes {
         ${DOCUMENT_SUMMARY_FIELDS}
-        creator { id name }
+        creator { name }
         createdAt updatedAt
       }
     }
@@ -187,11 +186,11 @@ export const documentTools: ToolDef[] = [
       },
       {
         title: 'Team document',
-        args: { workspace: 'test', teamId: 'team-uuid', title: 'Team runbook', content: 'Runbook body.' },
+        args: { workspace: 'interlink-group', teamId: 'team-uuid', title: 'Team runbook', content: 'Runbook body.' },
       },
     ],
     async handler(args) {
-      const ws = resolveAuthorWorkspace(args.workspace as string | undefined)
+      const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
       const { workspace: _, ...rawInput } = args
       const input = await buildDocumentInput(client, rawInput)

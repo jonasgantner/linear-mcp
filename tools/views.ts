@@ -705,7 +705,7 @@ export const viewTools: ToolDef[] = [
         title: 'Project display view',
         description: 'For project views, prefer empty projectFilterData plus project display preferences.',
         args: {
-          workspace: 'test',
+          workspace: 'personal',
           name: 'Projects by Status',
           icon: 'Briefcase',
           color: '#f2c94c',
@@ -737,7 +737,7 @@ export const viewTools: ToolDef[] = [
         title: 'Known-bad project status filter',
         description: 'This can render as a one-status/type project filter that is hard to edit; the MCP strips projectFilterData.status.',
         args: {
-          workspace: 'test',
+          workspace: 'personal',
           name: 'Bad project status filter example',
           projectFilterData: { status: { id: { in: ['project-status-uuid'] } } },
         },
@@ -829,7 +829,7 @@ ISSUE VIEWS:
 - fieldStatus, fieldPriority, fieldAssignee, fieldProject, fieldDueDate, fieldLabels, fieldMilestone, fieldEstimate, fieldTimeInCurrentStatus, fieldLinkCount, fieldDateCreated, fieldDateUpdated: boolean (toggle columns)
 
 PROJECT VIEWS:
-- projectLayout: "list" or "board" (avoid "timeline" in the free test workspace; it can render broken)
+- projectLayout: "list" or "board" (avoid "timeline" when the current workspace plan does not support it)
 - projectGrouping: "status", "lead", "initiative", "none" (alias: "noGrouping")
 - projectViewOrdering: "priority" or "status" (known-good GUI values)
 - showCompletedProjects: "all" or "none"
@@ -905,7 +905,7 @@ PROJECT VIEWS:
       {
         title: 'Project list',
         args: {
-          workspace: 'test',
+          workspace: 'personal',
           customViewId: 'custom-view-uuid',
           type: 'user',
           preferences: {
@@ -925,7 +925,7 @@ PROJECT VIEWS:
         title: 'Project board by lead',
         description: 'Project display preferences without raw project status filters.',
         args: {
-          workspace: 'test',
+          workspace: 'personal',
           customViewId: 'custom-view-uuid',
           type: 'user',
           preferences: {

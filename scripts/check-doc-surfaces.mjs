@@ -10,12 +10,15 @@ const surfaces = [
     required: [
       /Fresh sessions should use one source-of-truth chain:/,
       /Do not copy tool tables into skills, README sections, or Linear comments\./,
+      /Workspaces: `interlink-group` and `personal`/,
+      /Live-write tests are opt-in and have no workspace default\./,
     ],
     forbidden: [
       /106 tools/,
       /116 tools/,
-      /2 workspaces/,
-      /both workspaces/,
+      /LINEAR[_]TEST/,
+      /Codex[ ]Test/,
+      /linear[-]app[-]actor[-]test/,
     ],
   },
   {
@@ -29,8 +32,9 @@ const surfaces = [
     forbidden: [
       /106 tools/,
       /116 tools/,
-      /2 workspaces/,
-      /both workspaces/,
+      /LINEAR[_]TEST/,
+      /Codex[ ]Test/,
+      /`TEST[-]`/,
     ],
   },
   {
@@ -40,13 +44,14 @@ const surfaces = [
     required: [
       /Fresh-session rule:/,
       /generated `CAPABILITIES\.md` is the human-readable index/,
-      /\| `test` \| Disposable live MCP tests only \| `TEST-` \|/,
+      /\| `personal` \| Personal tasks/,
+      /\| `interlink-group` \| Business operations/,
     ],
     forbidden: [
-      /both workspaces/,
       /106 tools/,
       /116 tools/,
-      /custom Bun\/TS \(2 workspaces\)/,
+      /\| `test` \|/,
+      /`TEST[-]`/,
     ],
   },
   {
@@ -56,11 +61,20 @@ const surfaces = [
     required: [
       /generated in `CAPABILITIES\.md`/,
       /generated tool count, domains, examples, and usage guidance live in `CAPABILITIES\.md`/,
+      /explicit `personal` or `interlink-group` target/,
     ],
     forbidden: [
-      /custom Bun\/TS \(2 workspaces\)/,
       /106 tools, 15 domains/,
-      /Read tests\*\*: Search, get, list operations on both workspaces/,
+      /designated test workspace\/account/,
+    ],
+  },
+  {
+    label: 'AGENTS guidance',
+    path: '/Users/jonas/.codex/AGENTS.md',
+    optional: true,
+    required: [
+      /Audits, reviews, comparisons, research, and "check options" are advisory/,
+      /A later decision can be recorded separately without rewriting the original artifact\./,
     ],
   },
 ]

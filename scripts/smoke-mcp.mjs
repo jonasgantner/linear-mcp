@@ -88,6 +88,20 @@ function assertToolAnnotations(tools) {
   }
 }
 
+function assertWorkspaceDescriptions(tools) {
+  const descriptions = tools
+    .map(tool => tool.inputSchema?.properties?.workspace?.description)
+    .filter(Boolean)
+  if (descriptions.length === 0) {
+    throw new Error('No runtime workspace descriptions were published')
+  }
+  const expected = 'Workspace: interlink-group (default) or personal.'
+  const unexpected = [...new Set(descriptions.filter(description => description !== expected))]
+  if (unexpected.length > 0) {
+    throw new Error(`Runtime workspace description drift: expected "${expected}", got ${JSON.stringify(unexpected)}`)
+  }
+}
+
 child.stdout.on('data', chunk => {
   stdout += chunk.toString('utf8')
   let index
@@ -126,6 +140,7 @@ try {
   const toolList = tools.tools ?? []
   assertSearchIssuesOrderBySchema(toolList)
   assertToolAnnotations(toolList)
+  assertWorkspaceDescriptions(toolList)
   const names = toolList.map(tool => tool.name)
   const output = {
     server: init.serverInfo?.name ?? null,

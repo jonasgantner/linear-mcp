@@ -42,7 +42,7 @@ export type ToolDef = {
 export const WORKSPACE_PROP = {
   workspace: {
     type: 'string',
-    description: 'Workspace: biz (default), personal, or test.',
+    description: 'Workspace: interlink-group (default) or personal.',
   },
 } as const
 

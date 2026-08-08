@@ -1,11 +1,5 @@
 import type { LinearWorkspace } from './workspaces.js'
 
-export function authorizationHeader(workspace: LinearWorkspace): string {
-  return workspace.authScheme === 'oauth-bearer'
-    ? `Bearer ${workspace.token}`
-    : workspace.token
-}
-
 export class LinearError extends Error {
   constructor(
     public status: number,
@@ -42,7 +36,7 @@ export class LinearClient {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: authorizationHeader(this.workspace),
+        Authorization: this.workspace.token,
       },
       body: JSON.stringify({ query, variables }),
     })
@@ -68,7 +62,7 @@ export class LinearClient {
     await throttle(this.workspace.name)
     const res = await fetch(parsed, {
       method: 'GET',
-      headers: { Authorization: authorizationHeader(this.workspace) },
+      headers: { Authorization: this.workspace.token },
       redirect: 'error',
     })
     if (!res.ok) {

@@ -27,7 +27,7 @@ Useful live-discovery tools: `get_viewer`, `get_teams`, `list_labels`, `list_pro
 
 When starting without recent context, follow this order:
 
-1. Pick the workspace from the issue prefix or user request: `SPE-` -> `biz`; `J-` -> `personal`; `TEST-` or disposable live tests -> `test`.
+1. Pick the workspace from the issue prefix or user request: `SPE-` -> `interlink-group`; `J-` -> `personal`.
 2. Query live IDs before writing. Use names only for search/discovery; write calls usually need UUIDs.
 3. Prefer readback after every write. The useful pattern is write -> `get_*`/`list_*` -> assert the changed field.
 4. Treat old Linear comments, screenshots, and chat summaries as leads, not source of truth.
@@ -35,7 +35,7 @@ When starting without recent context, follow this order:
 
 | Need | Start With | Then Use | Watchouts |
 |---|---|---|---|
-| Workspace/user/team context | `get_viewer`, `get_teams` | `list_labels`, `list_project_statuses` | Always pass `workspace: "personal"` for J- issues; omitted workspace defaults to `biz`. |
+| Workspace/user/team context | `get_viewer`, `get_teams` | `list_labels`, `list_project_statuses` | Always pass `workspace: "personal"` for J- issues; omitted workspace defaults to `interlink-group`. |
 | Find or update issues | `search_issues`, `get_issue` | `create_issue`, `update_issue`, `archive_issue` | Use `archive_issue` over `delete_issue` except disposable tests; use JSON `null` for documented nullable clears. |
 | Issue relations and duplicates | `get_issue` | `create_issue_relation`, `mark_issue_duplicate` | Duplicate state requires a duplicate relation first; use `mark_issue_duplicate` for the full workflow. |
 | Comments and rich text anchors | `get_issue`, `search_documents` | `create_comment`, `resolve_comment`, `unresolve_comment` | Inline GUI anchors need `issueDescriptionId` or `documentId` plus exact `quotedText`. |
@@ -126,7 +126,7 @@ Source files: `tools/projects.ts`
 
 | Tool | Effect | Required params | Input fields | Feature gate | Description |
 |---|---|---|---:|---|---|
-| `search_projects` | read | - | 6 | - | Search and filter projects. This returns rich project readback; use first <= 25 and paginate to avoid Linear query-complexity limits, especially on the free test workspace. |
+| `search_projects` | read | - | 6 | - | Search and filter projects. This returns rich project readback; use first <= 25 and paginate to avoid Linear query-complexity limits. |
 | `list_project_statuses` | read | - | 4 | - | List workspace-level project statuses. Use status IDs when creating or updating projects. |
 | `get_project_status` | read | `id` | 2 | - | Get one project status by UUID. |
 | `get_project` | read | `id` | 2 | - | Get a project by ID with content, direct comments, issues, members, and status updates. |
@@ -210,10 +210,10 @@ Source files: `tools/labels.ts`
 | `update_project_label` | write | `id` | 8 | - | Update a project label name, description, color, parent, group flag, or retiredAt timestamp. |
 | `issue_label_retire` | write | `id` | 2 | - | Retire an issue label so it stops appearing in pickers while preserving historical assignments. Reversible with issue_label_restore. |
 | `issue_label_restore` | write | `id` | 2 | - | Restore a retired issue label. |
-| `delete_issue_label` | delete | `id` | 2 | - | Permanently delete an issue label. Use only for disposable test labels; prefer issue_label_retire for normal workspace cleanup. |
+| `delete_issue_label` | delete | `id` | 2 | - | Permanently delete an issue label. Use only for an approved disposable fixture; prefer issue_label_retire for normal workspace cleanup. |
 | `project_label_retire` | write | `id` | 2 | - | Retire a project label so it stops appearing in pickers while preserving historical assignments. Reversible with project_label_restore. |
 | `project_label_restore` | write | `id` | 2 | - | Restore a retired project label. |
-| `delete_project_label` | delete | `id` | 2 | - | Permanently delete a project label. Use only for disposable test labels; prefer project_label_retire for normal workspace cleanup. |
+| `delete_project_label` | delete | `id` | 2 | - | Permanently delete a project label. Use only for an approved disposable fixture; prefer project_label_retire for normal workspace cleanup. |
 
 Examples:
 
@@ -311,7 +311,7 @@ Source files: `tools/documents.ts`
 Examples:
 
 - `create_document` (Issue document): `{"workspace":"personal","issueId":"J-559","title":"Decision log","content":"# Decision log\n\n..."}`
-- `create_document` (Team document): `{"workspace":"test","teamId":"team-uuid","title":"Team runbook","content":"Runbook body."}`
+- `create_document` (Team document): `{"workspace":"interlink-group","teamId":"team-uuid","title":"Team runbook","content":"Runbook body."}`
 
 ## Favorites
 
@@ -351,15 +351,15 @@ Examples:
 - `create_view` (Team-scoped issues): `{"workspace":"personal","name":"Team active issues","icon":"Health","color":"#5e6ad2","teamId":"team-uuid","filterData":{"state":{"type":{"in":["unstarted","started"]}}}}` - Use top-level teamId only when the view should intentionally live under one team.
 - `create_view` (No project filter): `{"workspace":"personal","name":"Inbox without project","icon":"Health","color":"#26b5ce","filterData":{"project":{"or":[{"id":{"in":[]}},{"null":true}]}}}` - GUI-safe replacement for project.null=true.
 - `create_view` (Label filter): `{"workspace":"personal","name":"Label queue","icon":"Health","color":"#4cb782","filterData":{"labels":{"id":{"in":["label-uuid"]}}}}` - Filter issues by labels while staying editable in the Linear filter GUI.
-- `create_view` (Project display view): `{"workspace":"test","name":"Projects by Status","icon":"Briefcase","color":"#f2c94c","shared":false,"projectFilterData":{}}` - For project views, prefer empty projectFilterData plus project display preferences.
+- `create_view` (Project display view): `{"workspace":"personal","name":"Projects by Status","icon":"Briefcase","color":"#f2c94c","shared":false,"projectFilterData":{}}` - For project views, prefer empty projectFilterData plus project display preferences.
 - `create_view` (Initiatives by team): `{"workspace":"personal","name":"Team initiatives","icon":"Health","color":"#26b5ce","initiativeFilterData":{"teams":{"id":{"in":["team-uuid"]}}}}` - Initiative view filter using the workspace team collection relation.
 - `create_view` (Known-bad team filter): `{"workspace":"personal","name":"Bad team filter example","filterData":{"team":{"id":{"eq":"team-uuid"}}}}` - This executes but renders as a non-editable raw Team filter in Linear; the MCP strips team from filterData.
-- `create_view` (Known-bad project status filter): `{"workspace":"test","name":"Bad project status filter example","projectFilterData":{"status":{"id":{"in":["project-status-uuid"]}}}}` - This can render as a one-status/type project filter that is hard to edit; the MCP strips projectFilterData.status.
+- `create_view` (Known-bad project status filter): `{"workspace":"personal","name":"Bad project status filter example","projectFilterData":{"status":{"id":{"in":["project-status-uuid"]}}}}` - This can render as a one-status/type project filter that is hard to edit; the MCP strips projectFilterData.status.
 - `set_view_preferences` (Personal list defaults): `{"workspace":"personal","customViewId":"custom-view-uuid","type":"user","preferences":{"layout":"list","issueGrouping":"none","viewOrdering":"priority","viewOrderingDirection":"asc","showCompletedIssues":"none","fieldAssignee":false,"fieldStatus":true,"fieldPriority":true,"fieldProject":true,"fieldDueDate":true,"fieldLabels":true,"fieldMilestone":true}}` - List layout, no grouping, hide assignee, show status/priority/project/due date.
 - `set_view_preferences` (Grouped by status): `{"workspace":"personal","customViewId":"custom-view-uuid","type":"user","preferences":{"layout":"list","issueGrouping":"workflowState","issueSubGrouping":"none","showEmptyGroups":false,"fieldAssignee":false,"fieldStatus":true,"fieldPriority":true}}` - GUI-safe internal grouping value for the Linear Status dropdown.
 - `set_view_preferences` (Board by assignee): `{"workspace":"personal","customViewId":"custom-view-uuid","type":"user","preferences":{"layout":"board","issueGrouping":"assignee","issueSubGrouping":"none","viewOrdering":"priority","viewOrderingDirection":"asc","showCompletedIssues":"none","fieldStatus":true,"fieldPriority":true,"fieldLabels":true,"fieldProject":true}}` - Board layout with assignee grouping and stable visible issue fields.
-- `set_view_preferences` (Project list): `{"workspace":"test","customViewId":"custom-view-uuid","type":"user","preferences":{"projectLayout":"list","projectGrouping":"status","projectViewOrdering":"priority","showCompletedProjects":"none","projectFieldStatus":true,"projectFieldHealth":true,"projectFieldLead":true,"projectFieldStartDate":true,"projectFieldTargetDate":true}}`
-- `set_view_preferences` (Project board by lead): `{"workspace":"test","customViewId":"custom-view-uuid","type":"user","preferences":{"projectLayout":"board","projectGrouping":"lead","projectViewOrdering":"priority","showCompletedProjects":"none","projectFieldStatus":true,"projectFieldPriority":true,"projectFieldLead":true,"projectFieldHealth":true,"projectFieldTeams":true,"projectFieldInitiatives":true}}` - Project display preferences without raw project status filters.
+- `set_view_preferences` (Project list): `{"workspace":"personal","customViewId":"custom-view-uuid","type":"user","preferences":{"projectLayout":"list","projectGrouping":"status","projectViewOrdering":"priority","showCompletedProjects":"none","projectFieldStatus":true,"projectFieldHealth":true,"projectFieldLead":true,"projectFieldStartDate":true,"projectFieldTargetDate":true}}`
+- `set_view_preferences` (Project board by lead): `{"workspace":"personal","customViewId":"custom-view-uuid","type":"user","preferences":{"projectLayout":"board","projectGrouping":"lead","projectViewOrdering":"priority","showCompletedProjects":"none","projectFieldStatus":true,"projectFieldPriority":true,"projectFieldLead":true,"projectFieldHealth":true,"projectFieldTeams":true,"projectFieldInitiatives":true}}` - Project display preferences without raw project status filters.
 
 ## Files
 
@@ -381,7 +381,7 @@ Source files: `tools/files.ts`
 
 Examples:
 
-- `download_file` (Download an embedded issue PDF): `{"workspace":"test","url":"https://uploads.linear.app/path/to/private-file","destinationPath":"/absolute/path/form.pdf"}` - Use the URL returned by get_issue.issue.descriptionAssets and keep the same workspace.
+- `download_file` (Download an embedded issue PDF): `{"workspace":"personal","url":"https://uploads.linear.app/path/to/private-file","destinationPath":"/absolute/path/form.pdf"}` - Use the URL returned by get_issue.issue.descriptionAssets and keep the same workspace.
 - `upload_file` (Upload local PDF): `{"workspace":"personal","path":"/absolute/path/report.pdf","makePublic":false}` - Use file upload tools for local binary files; the result includes markdown to paste into descriptions/comments/documents.
 - `upload_file` (Upload image with markdown): `{"workspace":"personal","path":"/absolute/path/screenshot.png","embedImages":true}`
 - `create_comment_with_files` (Issue comment with files): `{"workspace":"personal","issueId":"J-559","body":"Attached verification output.","paths":["/absolute/path/report.md","/absolute/path/screenshot.png"]}`
@@ -405,8 +405,8 @@ Examples:
 
 - `create_attachment` (External resource card): `{"workspace":"personal","issueId":"J-559","title":"Linear API docs","url":"https://developers.linear.app/docs/graphql/working-with-the-graphql-api"}` - Use attachments for URLs/resources, not local file uploads.
 - `create_attachment` (Resource card with comment): `{"workspace":"personal","issueId":"J-559","title":"Design note","url":"https://example.com/design-note","commentBody":"Linked for context."}`
-- `link_attachment_discord` (Discord message in biz): `{"workspace":"biz","issueId":"SPE-123","channelId":"discord-channel-id","messageId":"discord-message-id","url":"https://discord.com/channels/guild/channel/message"}` - The Discord integration is enabled in biz; use create_attachment with the URL as fallback when the integration rejects the link.
-- `link_attachment_discord` (Discord thread message in biz): `{"workspace":"biz","issueId":"SPE-123","channelId":"discord-thread-id","messageId":"thread-message-id","url":"https://discord.com/channels/guild/thread/message","title":"Discord thread"}` - Use the Discord thread ID as channelId. Verified with SPE-2217: clicking the Linear attachment opened the linked Discord thread.
+- `link_attachment_discord` (Discord message in interlink-group): `{"workspace":"interlink-group","issueId":"SPE-123","channelId":"discord-channel-id","messageId":"discord-message-id","url":"https://discord.com/channels/guild/channel/message"}` - The Discord integration is enabled in Interlink Group; use create_attachment with the URL as fallback when the integration rejects the link.
+- `link_attachment_discord` (Discord thread message in interlink-group): `{"workspace":"interlink-group","issueId":"SPE-123","channelId":"discord-thread-id","messageId":"thread-message-id","url":"https://discord.com/channels/guild/thread/message","title":"Discord thread"}` - Use the Discord thread ID as channelId. Verified with SPE-2217: clicking the Linear attachment opened the linked Discord thread.
 
 ## Batch Operations
 
@@ -433,11 +433,11 @@ Source files: `tools/templates.ts`
 | `create_recurring_issue_template` | write | `name`, `teamId`, `title`, `scheduleInterval`, `scheduleType`, `startAt` | 20 | - | Create a recurring issue template with validated schedule fields instead of fragile raw templateData JSON. Delete the template to stop future spawning; archive any already-created recurring issues separately. |
 | `update_template` | write | `id` | 9 | - | Update an existing template. Pass changed fields only. templateData replaces entirely (no merge). |
 | `update_recurring_issue_template` | write | `id` | 20 | - | Update a recurring issue template with validated schedule fields. Reads the existing templateData, merges provided issue/schedule fields, and replaces templateData with a full valid recurringIssue payload. |
-| `delete_template` | delete | `id` | 2 | - | Hard-delete a template. Irreversible — use only for test/cleanup. To stop a recurring template from spawning future issues, delete it; archive any already-created issues separately. |
+| `delete_template` | delete | `id` | 2 | - | Hard-delete a template. Irreversible — use only for approved fixture cleanup. To stop a recurring template from spawning future issues, delete it; archive any already-created issues separately. |
 
 Examples:
 
-- `create_recurring_issue_template` (Weekly recurring issue): `{"workspace":"test","name":"MCP Smoke Weekly Template","teamId":"team-uuid","title":"Weekly review","issueDescription":"Recurring issue generated by Linear.","scheduleInterval":1,"scheduleType":"weeks","startAt":"2026-12-31","icon":"Health","color":"#5e6ad2"}` - Use a far-future startAt for fixtures, but still verify whether Linear created an initial issue and archive it separately.
+- `create_recurring_issue_template` (Weekly recurring issue): `{"workspace":"personal","name":"MCP Smoke Weekly Template","teamId":"team-uuid","title":"Weekly review","issueDescription":"Recurring issue generated by Linear.","scheduleInterval":1,"scheduleType":"weeks","startAt":"2026-12-31","icon":"Health","color":"#5e6ad2"}` - Use a far-future startAt for fixtures, but still verify whether Linear created an initial issue and archive it separately.
 
 ## Metadata
 
@@ -449,12 +449,9 @@ Source files: `tools/visualMetadata.ts`
 
 ## Runtime Notes
 
-- `workspace` selects `biz`, `personal`, or `test` where the tool schema exposes it; `biz` is the default.
-- Workspace plan levels: `biz` and `personal` are Basic; `test` is Free.
-- User-token authentication remains the default for every workspace. The isolated `test` pilot can opt into `LINEAR_TEST_APP_TOKEN` plus `LINEAR_TEST_WRITE_ACTOR=app`.
-- In app mode, only comment/document creation tools use the OAuth Bearer app token; reads and all other mutations keep using the user token.
-- App mode fails closed when the app token is missing or invalid and never silently falls back to the user actor.
-- Prefer archive/unarchive tools over hard-delete tools except for disposable test records.
+- `workspace` selects `interlink-group` or `personal` where the tool schema exposes it; `interlink-group` is the default.
+- Both workspaces authenticate with Jonas user tokens; comments and documents therefore appear as Jonas.
+- Prefer archive/unarchive tools over hard-delete tools except for approved self-cleaning live-test fixtures.
 - Binary/local file uploads use the file tools. URL/resource cards use attachment tools.
 - Private files are discovered as `get_issue.issue.descriptionAssets`, comment `assets`, or `get_document.document.contentAssets`, then downloaded with `download_file`.
 - Workspace-level views omit `teamId` and use shared organization preferences.

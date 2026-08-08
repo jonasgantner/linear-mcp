@@ -408,7 +408,7 @@ export const labelTools: ToolDef[] = [
   },
   {
     name: 'delete_issue_label',
-    description: 'Permanently delete an issue label. Use only for disposable test labels; prefer issue_label_retire for normal workspace cleanup.',
+    description: 'Permanently delete an issue label. Use only for an approved disposable fixture; prefer issue_label_retire for normal workspace cleanup.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -462,7 +462,7 @@ export const labelTools: ToolDef[] = [
   },
   {
     name: 'delete_project_label',
-    description: 'Permanently delete a project label. Use only for disposable test labels; prefer project_label_retire for normal workspace cleanup.',
+    description: 'Permanently delete a project label. Use only for an approved disposable fixture; prefer project_label_retire for normal workspace cleanup.',
     inputSchema: {
       type: 'object',
       properties: {

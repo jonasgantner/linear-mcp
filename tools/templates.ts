@@ -241,7 +241,7 @@ export const templateTools: ToolDef[] = [
         title: 'Weekly recurring issue',
         description: 'Use a far-future startAt for fixtures, but still verify whether Linear created an initial issue and archive it separately.',
         args: {
-          workspace: 'test',
+          workspace: 'personal',
           name: 'MCP Smoke Weekly Template',
           teamId: 'team-uuid',
           title: 'Weekly review',
@@ -342,7 +342,7 @@ export const templateTools: ToolDef[] = [
   },
   {
     name: 'delete_template',
-    description: 'Hard-delete a template. Irreversible — use only for test/cleanup. To stop a recurring template from spawning future issues, delete it; archive any already-created issues separately.',
+    description: 'Hard-delete a template. Irreversible — use only for approved fixture cleanup. To stop a recurring template from spawning future issues, delete it; archive any already-created issues separately.',
     inputSchema: {
       type: 'object',
       properties: {

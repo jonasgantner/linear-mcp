@@ -3,7 +3,7 @@ import { basename, dirname, isAbsolute, join } from 'node:path'
 import { link, open, readFile, rename, stat, unlink } from 'node:fs/promises'
 import type { ToolDef } from './_types.js'
 import { WORKSPACE_PROP } from './_types.js'
-import { resolveAuthorWorkspace, resolveWorkspace } from '../workspaces.js'
+import { resolveWorkspace } from '../workspaces.js'
 import { LinearClient } from '../client.js'
 import { COMMENT_TARGET_PROPS, buildCommentCreateInput } from './commentTargets.js'
 import { prepareInlineAnchor } from './inlineAnchors.js'
@@ -76,8 +76,7 @@ const CREATE_COMMENT_MUTATION = `
       comment {
         id body quotedText url
         issueId projectId initiativeId documentContentId projectUpdateId initiativeUpdateId parentId
-        user { id name }
-        botActor { id name type subType userDisplayName }
+        user { name }
         createdAt
       }
     }
@@ -103,7 +102,7 @@ const CREATE_DOCUMENT_MUTATION = `
   mutation CreateDocument($input: DocumentCreateInput!) {
     documentCreate(input: $input) {
       success
-      document { ${DOCUMENT_FULL_FIELDS} creator { id name } }
+      document { ${DOCUMENT_FULL_FIELDS} }
     }
   }
 `
@@ -416,7 +415,7 @@ export const fileTools: ToolDef[] = [
       {
         title: 'Download an embedded issue PDF',
         description: 'Use the URL returned by get_issue.issue.descriptionAssets and keep the same workspace.',
-        args: { workspace: 'test', url: 'https://uploads.linear.app/path/to/private-file', destinationPath: '/absolute/path/form.pdf' },
+        args: { workspace: 'personal', url: 'https://uploads.linear.app/path/to/private-file', destinationPath: '/absolute/path/form.pdf' },
       },
     ],
     async handler(args) {
@@ -535,7 +534,7 @@ export const fileTools: ToolDef[] = [
       },
     ],
     async handler(args) {
-      const ws = resolveAuthorWorkspace(args.workspace as string | undefined)
+      const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
       const inlineAnchor = await prepareInlineAnchor(client, args)
       const uploads = await uploadPaths(client, args.paths as string[], {
@@ -757,7 +756,7 @@ export const fileTools: ToolDef[] = [
       required: ['title', 'paths'],
     },
     async handler(args) {
-      const ws = resolveAuthorWorkspace(args.workspace as string | undefined)
+      const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
       assertValidVisualMetadataInput(args)
       const uploads = await uploadPaths(client, args.paths as string[], {

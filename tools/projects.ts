@@ -304,7 +304,7 @@ async function buildProjectInput(
 export const projectTools: ToolDef[] = [
   {
     name: 'search_projects',
-    description: 'Search and filter projects. This returns rich project readback; use first <= 25 and paginate to avoid Linear query-complexity limits, especially on the free test workspace.',
+    description: 'Search and filter projects. This returns rich project readback; use first <= 25 and paginate to avoid Linear query-complexity limits.',
     inputSchema: {
       type: 'object',
       properties: {

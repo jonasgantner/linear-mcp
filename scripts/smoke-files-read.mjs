@@ -4,9 +4,10 @@ import { mkdtemp, readFile, rmdir, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawn } from 'node:child_process'
+import { requireLiveWriteTarget } from './live-write-guard.mjs'
 
 const wrapper = '/Users/jonas/.agents/mcp/wrappers/linear.sh'
-const workspace = 'test'
+const workspace = requireLiveWriteTarget()
 const child = spawn(wrapper, [], { stdio: ['pipe', 'pipe', 'pipe'] })
 let stdout = ''
 let stderr = ''
@@ -77,7 +78,7 @@ try {
 
   const teams = await call('get_teams', { workspace })
   const teamId = teams.teams?.nodes?.[0]?.id
-  assert.ok(teamId, 'test workspace should contain at least one team')
+  assert.ok(teamId, `${workspace} workspace should contain at least one team`)
 
   const issueCreate = await call('create_issue', {
     workspace,
@@ -158,6 +159,7 @@ try {
     downloaded: downloaded.download,
   }, null, 2))
 } finally {
+  const cleanupErrors = []
   for (const [tool, args] of [
     ['delete_attachment', attachmentId ? { workspace, id: attachmentId } : null],
     ['delete_comment', commentId ? { workspace, id: commentId } : null],
@@ -168,7 +170,7 @@ try {
     try {
       await call(tool, args)
     } catch (error) {
-      console.error(`Cleanup failed for ${tool}: ${error instanceof Error ? error.message : String(error)}`)
+      cleanupErrors.push(`${tool} ${args.id}: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
   child.stdin.end()
@@ -177,4 +179,8 @@ try {
   await unlink(fixturePath).catch(() => undefined)
   await rmdir(directory).catch(() => undefined)
   if (stderr.trim()) console.error(stderr.trim())
+  if (cleanupErrors.length > 0) {
+    console.error(`Live file smoke cleanup failed:\n${cleanupErrors.map(error => `- ${error}`).join('\n')}`)
+    process.exitCode = 1
+  }
 }

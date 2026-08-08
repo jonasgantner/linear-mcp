@@ -223,14 +223,14 @@ export const attachmentTools: ToolDef[] = [
     },
     examples: [
       {
-        title: 'Discord message in biz',
-        description: 'The Discord integration is enabled in biz; use create_attachment with the URL as fallback when the integration rejects the link.',
-        args: { workspace: 'biz', issueId: 'SPE-123', channelId: 'discord-channel-id', messageId: 'discord-message-id', url: 'https://discord.com/channels/guild/channel/message' },
+        title: 'Discord message in interlink-group',
+        description: 'The Discord integration is enabled in Interlink Group; use create_attachment with the URL as fallback when the integration rejects the link.',
+        args: { workspace: 'interlink-group', issueId: 'SPE-123', channelId: 'discord-channel-id', messageId: 'discord-message-id', url: 'https://discord.com/channels/guild/channel/message' },
       },
       {
-        title: 'Discord thread message in biz',
+        title: 'Discord thread message in interlink-group',
         description: 'Use the Discord thread ID as channelId. Verified with SPE-2217: clicking the Linear attachment opened the linked Discord thread.',
-        args: { workspace: 'biz', issueId: 'SPE-123', channelId: 'discord-thread-id', messageId: 'thread-message-id', url: 'https://discord.com/channels/guild/thread/message', title: 'Discord thread' },
+        args: { workspace: 'interlink-group', issueId: 'SPE-123', channelId: 'discord-thread-id', messageId: 'thread-message-id', url: 'https://discord.com/channels/guild/thread/message', title: 'Discord thread' },
       },
     ],
     async handler(args) {
