@@ -1,14 +1,14 @@
 import type { ToolDef } from './_types.js'
-import { WORKSPACE_PROP, PAGINATION_PROPS } from './_types.js'
+import { INCLUDE_ARCHIVED_PROP, WORKSPACE_PROP, PAGINATION_PROPS } from './_types.js'
 import { resolveWorkspace } from '../workspaces.js'
 import { LinearClient } from '../client.js'
 
 const LIST_CYCLES_QUERY = `
-  query ListCycles($filter: CycleFilter, $first: Int, $after: String) {
-    cycles(filter: $filter, first: $first, after: $after) {
+  query ListCycles($filter: CycleFilter, $first: Int, $after: String, $includeArchived: Boolean) {
+    cycles(filter: $filter, first: $first, after: $after, includeArchived: $includeArchived) {
       pageInfo { hasNextPage endCursor }
       nodes {
-        id number name description startsAt endsAt completedAt
+        id number name description startsAt endsAt completedAt archivedAt autoArchivedAt
         progress
         team { id name key }
         issues { nodes { id identifier title url state { name } priority assignee { name } } }
@@ -44,7 +44,7 @@ const CYCLE_ARCHIVE_MUTATION = `
 export const cycleTools: ToolDef[] = [
   {
     name: 'list_cycles',
-    description: 'List cycles (sprints) for a team. Use "type" for quick access to current/next/previous cycle.',
+    description: 'List cycles (sprints) for a team. Active-only by default; include archived cycles with includeArchived. Use "type" for quick access to current/next/previous cycle.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -53,8 +53,15 @@ export const cycleTools: ToolDef[] = [
         type: { type: 'string', description: 'Quick filter: "current", "next", or "previous". Omit for all cycles.' },
         filter: { type: 'object', description: 'Raw CycleFilter object' },
         ...PAGINATION_PROPS,
+        ...INCLUDE_ARCHIVED_PROP,
       },
     },
+    examples: [
+      {
+        title: 'Include archived cycles',
+        args: { workspace: 'interlink-group', includeArchived: true, first: 10 },
+      },
+    ],
     async handler(args) {
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
@@ -83,6 +90,7 @@ export const cycleTools: ToolDef[] = [
         filter: Object.keys(filter).length > 0 ? filter : undefined,
         first,
         after: args.after as string | undefined,
+        includeArchived: args.includeArchived === true,
       }
       const data = await client.query(LIST_CYCLES_QUERY, variables)
       return JSON.stringify(data, null, 2)
@@ -136,7 +144,7 @@ export const cycleTools: ToolDef[] = [
   },
   {
     name: 'cycle_archive',
-    description: 'Archive a cycle. Linear has no hard-delete for cycles; archiving removes from active views while preserving history. Note: Linear rejects archiving the currently-active cycle.',
+    description: "Archive a cycle and unlink its assigned issues. Linear rejects archiving the currently active cycle, and its public GraphQL API exposes no cycle-unarchive mutation.",
     inputSchema: {
       type: 'object',
       properties: {

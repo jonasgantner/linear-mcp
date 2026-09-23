@@ -1,5 +1,5 @@
 import type { ToolDef } from './_types.js'
-import { WORKSPACE_PROP, PAGINATION_PROPS } from './_types.js'
+import { INCLUDE_ARCHIVED_PROP, WORKSPACE_PROP, PAGINATION_PROPS } from './_types.js'
 import { resolveWorkspace } from '../workspaces.js'
 import { LinearClient } from '../client.js'
 import { DOCUMENT_SUMMARY_FIELDS } from './documents.js'
@@ -28,11 +28,11 @@ const PROJECT_RELATION_FIELDS = `
 `
 
 const SEARCH_PROJECTS_QUERY = `
-  query SearchProjects($filter: ProjectFilter, $first: Int, $after: String) {
-    projects(filter: $filter, first: $first, after: $after) {
+  query SearchProjects($filter: ProjectFilter, $first: Int, $after: String, $includeArchived: Boolean) {
+    projects(filter: $filter, first: $first, after: $after, includeArchived: $includeArchived) {
       pageInfo { hasNextPage endCursor }
       nodes {
-        id name description url state archivedAt startDate targetDate progress
+        id name description url state archivedAt autoArchivedAt trashed startDate targetDate progress
         status { ${PROJECT_STATUS_FIELDS} }
         lead { id name }
         teams { nodes { id name key } }
@@ -47,7 +47,7 @@ const SEARCH_PROJECTS_QUERY = `
 const GET_PROJECT_QUERY = `
   query GetProject($id: String!) {
     project(id: $id) {
-      id name description content contentState url state archivedAt icon color priority startDate targetDate progress
+      id name description content contentState url state archivedAt autoArchivedAt trashed icon color priority startDate targetDate progress
       documentContent { id }
       status { ${PROJECT_STATUS_FIELDS} }
       lead { id name }
@@ -106,8 +106,8 @@ const UPDATE_PROJECT_MUTATION = `
   }
 `
 
-const ARCHIVE_PROJECT_MUTATION = `
-  mutation ArchiveProject($id: String!) {
+const DELETE_PROJECT_MUTATION = `
+  mutation DeleteProject($id: String!) {
     projectDelete(id: $id) { success }
   }
 `
@@ -116,7 +116,7 @@ const UNARCHIVE_PROJECT_MUTATION = `
   mutation UnarchiveProject($id: String!) {
     projectUnarchive(id: $id) {
       success
-      entity { id name archivedAt url state status { ${PROJECT_STATUS_FIELDS} } }
+      entity { id name archivedAt autoArchivedAt trashed url state status { ${PROJECT_STATUS_FIELDS} } }
     }
   }
 `
@@ -304,7 +304,7 @@ async function buildProjectInput(
 export const projectTools: ToolDef[] = [
   {
     name: 'search_projects',
-    description: 'Search and filter projects. This returns rich project readback; use first <= 25 and paginate to avoid Linear query-complexity limits.',
+    description: 'Search and filter projects. Active-only by default; include archived and trashed projects with includeArchived. This returns rich project readback; use first <= 25 and paginate to avoid Linear query-complexity limits.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -314,8 +314,15 @@ export const projectTools: ToolDef[] = [
         filter: { type: 'object', description: 'Raw ProjectFilter object (overrides convenience params)' },
         first: { type: 'integer', description: 'Number of results (default: 25, max: 25 for this rich query)', maximum: 25 },
         after: PAGINATION_PROPS.after,
+        ...INCLUDE_ARCHIVED_PROP,
       },
     },
+    examples: [
+      {
+        title: 'Include archived and trashed projects',
+        args: { workspace: 'interlink-group', includeArchived: true, first: 25 },
+      },
+    ],
     async handler(args) {
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
@@ -330,6 +337,7 @@ export const projectTools: ToolDef[] = [
         filter: Object.keys(filter).length > 0 ? filter : undefined,
         first,
         after: args.after as string | undefined,
+        includeArchived: args.includeArchived === true,
       }
       const data = await client.query(SEARCH_PROJECTS_QUERY, variables)
       return JSON.stringify(data, null, 2)
@@ -478,8 +486,8 @@ export const projectTools: ToolDef[] = [
     },
   },
   {
-    name: 'archive_project',
-    description: 'Archive a project. This uses Linear projectDelete, which is reversible via unarchive_project.',
+    name: 'delete_project',
+    description: "Move a project to Linear's trash. Restore it during Linear's 30-day grace period with unarchive_project.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -491,13 +499,13 @@ export const projectTools: ToolDef[] = [
     async handler(args) {
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
-      const data = await client.query(ARCHIVE_PROJECT_MUTATION, { id: args.id })
+      const data = await client.query(DELETE_PROJECT_MUTATION, { id: args.id })
       return JSON.stringify(data, null, 2)
     },
   },
   {
     name: 'unarchive_project',
-    description: 'Restore an archived project.',
+    description: 'Restore an archived or trashed project.',
     inputSchema: {
       type: 'object',
       properties: {

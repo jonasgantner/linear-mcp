@@ -53,6 +53,37 @@ function assertSearchIssuesOrderBySchema(tools) {
   }
 }
 
+function assertArchiveSchemas(tools) {
+  const coreReads = ['search_issues', 'search_projects', 'list_initiatives', 'search_documents', 'list_cycles']
+  for (const name of coreReads) {
+    const properties = tools.find(tool => tool.name === name)?.inputSchema?.properties
+    if (!properties?.includeArchived) {
+      throw new Error(`${name} is missing includeArchived`)
+    }
+  }
+
+  const issueProperties = tools.find(tool => tool.name === 'search_issues')?.inputSchema?.properties
+  if (!issueProperties?.archivedOnly) {
+    throw new Error('search_issues is missing archivedOnly')
+  }
+
+  for (const name of coreReads.slice(1)) {
+    const properties = tools.find(tool => tool.name === name)?.inputSchema?.properties
+    if (properties?.archivedOnly) {
+      throw new Error(`${name} must not expose archivedOnly because Linear cannot filter it reliably`)
+    }
+  }
+}
+
+function assertArchiveToolNames(tools) {
+  const names = new Set(tools.map(tool => tool.name))
+  for (const name of ['delete_project', 'delete_initiative', 'unarchive_document']) {
+    if (!names.has(name)) throw new Error(`Missing lifecycle tool: ${name}`)
+  }
+  if (names.has('archive_project')) throw new Error('Removed tool archive_project is still published')
+  if (names.size !== 138) throw new Error(`Expected 138 tools, got ${names.size}`)
+}
+
 function assertToolAnnotations(tools) {
   const missing = tools.filter(tool => !tool.annotations).map(tool => tool.name)
   if (missing.length) {
@@ -78,6 +109,41 @@ function assertToolAnnotations(tools) {
       idempotentHint: false,
       openWorldHint: false,
     },
+    delete_project: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    delete_initiative: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+    unarchive_document: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  }
+
+  for (const name of [
+    'archive_issue',
+    'unarchive_issue',
+    'unarchive_project',
+    'archive_initiative',
+    'unarchive_initiative',
+    'unarchive_document',
+    'cycle_archive',
+  ]) {
+    expectedByTool[name] = {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    }
   }
 
   for (const [name, expected] of Object.entries(expectedByTool)) {
@@ -139,6 +205,8 @@ try {
   const tools = await request('tools/list')
   const toolList = tools.tools ?? []
   assertSearchIssuesOrderBySchema(toolList)
+  assertArchiveSchemas(toolList)
+  assertArchiveToolNames(toolList)
   assertToolAnnotations(toolList)
   assertWorkspaceDescriptions(toolList)
   const names = toolList.map(tool => tool.name)

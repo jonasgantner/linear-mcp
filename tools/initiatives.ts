@@ -1,5 +1,5 @@
 import type { ToolDef } from './_types.js'
-import { WORKSPACE_PROP, PAGINATION_PROPS } from './_types.js'
+import { INCLUDE_ARCHIVED_PROP, WORKSPACE_PROP, PAGINATION_PROPS } from './_types.js'
 import { resolveWorkspace } from '../workspaces.js'
 import { LinearClient } from '../client.js'
 import { DOCUMENT_SUMMARY_FIELDS } from './documents.js'
@@ -14,7 +14,7 @@ const INITIATIVE_STATUS_DESCRIPTION = 'Status: Proposed, Planned, Active, Comple
 const INITIATIVE_PRIORITY_DESCRIPTION = '0=none, 1=urgent, 2=high, 3=medium, 4=low'
 
 const INITIATIVE_FIELDS = `
-  id name description content url status priority prioritySortOrder color icon archivedAt
+  id name description content url status priority prioritySortOrder color icon archivedAt trashed
   targetDate targetDateResolution
   owner { id name }
   createdAt updatedAt
@@ -31,15 +31,15 @@ const INITIATIVE_UPDATE_FIELDS = `
 `
 
 const LIST_INITIATIVE_FIELDS = `
-  id name description url status priority prioritySortOrder color icon archivedAt
+  id name description url status priority prioritySortOrder color icon archivedAt trashed
   targetDate targetDateResolution
   owner { id name }
   createdAt updatedAt
 `
 
 const LIST_INITIATIVES_LIGHT_QUERY = `
-  query ListInitiatives($first: Int, $after: String) {
-    initiatives(first: $first, after: $after) {
+  query ListInitiatives($first: Int, $after: String, $includeArchived: Boolean) {
+    initiatives(first: $first, after: $after, includeArchived: $includeArchived) {
       pageInfo { hasNextPage endCursor }
       nodes { ${LIST_INITIATIVE_FIELDS} }
     }
@@ -47,8 +47,8 @@ const LIST_INITIATIVES_LIGHT_QUERY = `
 `
 
 const LIST_INITIATIVES_WITH_PROJECTS_QUERY = `
-  query ListInitiativesWithProjects($first: Int, $after: String) {
-    initiatives(first: $first, after: $after) {
+  query ListInitiativesWithProjects($first: Int, $after: String, $includeArchived: Boolean) {
+    initiatives(first: $first, after: $after, includeArchived: $includeArchived) {
       pageInfo { hasNextPage endCursor }
       nodes {
         ${LIST_INITIATIVE_FIELDS}
@@ -201,7 +201,6 @@ const DELETE_INITIATIVE_MUTATION = `
   mutation DeleteInitiative($id: String!) {
     initiativeDelete(id: $id) {
       success
-      entity { ${INITIATIVE_FIELDS} }
     }
   }
 `
@@ -256,18 +255,25 @@ async function findInitiativeProjectLink(
 export const initiativeTools: ToolDef[] = [
   {
     name: 'list_initiatives',
-    description: 'List all initiatives in the workspace.',
+    description: 'List initiatives in the workspace. Active-only by default; include archived and trashed initiatives with includeArchived.',
     inputSchema: {
       type: 'object',
       properties: {
         ...WORKSPACE_PROP,
         ...PAGINATION_PROPS,
+        ...INCLUDE_ARCHIVED_PROP,
         includeProjects: {
           type: 'boolean',
           description: 'Include linked project summaries. Default false keeps list calls lightweight; use get_initiative for rich detail.',
         },
       },
     },
+    examples: [
+      {
+        title: 'Include archived and trashed initiatives',
+        args: { workspace: 'personal', includeArchived: true, first: 50 },
+      },
+    ],
     async handler(args) {
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
@@ -275,6 +281,7 @@ export const initiativeTools: ToolDef[] = [
       const data = await client.query(query, {
         first: (args.first as number) || 50,
         after: args.after as string | undefined,
+        includeArchived: args.includeArchived === true,
       })
       return JSON.stringify(data, null, 2)
     },
@@ -429,7 +436,7 @@ export const initiativeTools: ToolDef[] = [
   },
   {
     name: 'unarchive_initiative',
-    description: 'Restore an archived initiative.',
+    description: 'Restore an archived or trashed initiative.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -442,6 +449,24 @@ export const initiativeTools: ToolDef[] = [
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
       const data = await client.query(UNARCHIVE_INITIATIVE_MUTATION, { id: args.id })
+      return JSON.stringify(data, null, 2)
+    },
+  },
+  {
+    name: 'delete_initiative',
+    description: "Move an initiative to Linear's trash. Restore it during Linear's 30-day grace period with unarchive_initiative.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...WORKSPACE_PROP,
+        id: { type: 'string', description: 'Initiative UUID' },
+      },
+      required: ['id'],
+    },
+    async handler(args) {
+      const ws = resolveWorkspace(args.workspace as string | undefined)
+      const client = new LinearClient(ws)
+      const data = await client.query(DELETE_INITIATIVE_MUTATION, { id: args.id })
       return JSON.stringify(data, null, 2)
     },
   },

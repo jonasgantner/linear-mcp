@@ -1,5 +1,5 @@
 import type { ToolDef } from './_types.js'
-import { WORKSPACE_PROP, PAGINATION_PROPS } from './_types.js'
+import { ARCHIVED_ONLY_PROP, INCLUDE_ARCHIVED_PROP, WORKSPACE_PROP, PAGINATION_PROPS } from './_types.js'
 import { resolveWorkspace } from '../workspaces.js'
 import { LinearClient } from '../client.js'
 import { DEFAULT_EMBEDDED_COMMENT_LIMIT, listFullComments } from './commentRead.js'
@@ -18,7 +18,7 @@ const ISSUE_FIELDS = `
   cycle { id number name startsAt endsAt }
   parent { id identifier title url }
   labels { nodes { id name color } }
-  createdAt updatedAt completedAt canceledAt
+  createdAt updatedAt completedAt canceledAt archivedAt autoArchivedAt trashed
 `
 
 const ISSUE_SUBSCRIBER_FIELDS = `
@@ -29,8 +29,8 @@ const ISSUE_SUBSCRIBER_FIELDS = `
 `
 
 const SEARCH_ISSUES_QUERY = `
-  query SearchIssues($filter: IssueFilter, $first: Int, $after: String, $orderBy: PaginationOrderBy) {
-    issues(filter: $filter, first: $first, after: $after, orderBy: $orderBy) {
+  query SearchIssues($filter: IssueFilter, $first: Int, $after: String, $orderBy: PaginationOrderBy, $includeArchived: Boolean) {
+    issues(filter: $filter, first: $first, after: $after, orderBy: $orderBy, includeArchived: $includeArchived) {
       pageInfo { hasNextPage endCursor }
       nodes { ${ISSUE_FIELDS} }
     }
@@ -136,7 +136,7 @@ async function getIssueSubscriberIds(client: LinearClient, issueId: unknown): Pr
   return data.issue.subscribers.nodes.map(user => user.id)
 }
 
-function buildIssueFilter(args: Record<string, unknown>): Record<string, unknown> {
+export function buildIssueFilter(args: Record<string, unknown>): Record<string, unknown> {
   if (args.filter) return args.filter as Record<string, unknown>
   const filter: Record<string, unknown> = {}
   if (args.state) filter.state = { name: { eqIgnoreCase: args.state } }
@@ -158,6 +158,24 @@ function buildIssueFilter(args: Record<string, unknown>): Record<string, unknown
   return filter
 }
 
+export function buildIssueSearchVariables(args: Record<string, unknown>): Record<string, unknown> {
+  const baseFilter = buildIssueFilter(args)
+  const archivedOnly = args.archivedOnly === true
+  const filter = archivedOnly
+    ? Object.keys(baseFilter).length > 0
+      ? { and: [baseFilter, { archivedAt: { null: false } }] }
+      : { archivedAt: { null: false } }
+    : baseFilter
+
+  return {
+    filter: Object.keys(filter).length > 0 ? filter : undefined,
+    first: (args.first as number) || 50,
+    after: args.after as string | undefined,
+    orderBy: resolveIssueOrderBy(args.orderBy),
+    includeArchived: args.includeArchived === true || archivedOnly,
+  }
+}
+
 function resolveIssueOrderBy(orderBy: unknown): (typeof ISSUE_ORDER_BY_VALUES)[number] {
   const value = orderBy ?? 'updatedAt'
   if (ISSUE_ORDER_BY_VALUES.includes(value as (typeof ISSUE_ORDER_BY_VALUES)[number])) {
@@ -169,7 +187,7 @@ function resolveIssueOrderBy(orderBy: unknown): (typeof ISSUE_ORDER_BY_VALUES)[n
 export const issueTools: ToolDef[] = [
   {
     name: 'search_issues',
-    description: 'Search and filter issues. Supports convenience params (state, assignee, label, team, project, priority, query) or a raw IssueFilter object for advanced filtering.',
+    description: 'Search and filter issues. Active-only by default. Supports archived reads plus convenience params (state, assignee, label, team, project, priority, query) or a raw IssueFilter object for advanced filtering.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -183,19 +201,29 @@ export const issueTools: ToolDef[] = [
         query: { type: 'string', description: 'Full-text search in title and description' },
         filter: { type: 'object', description: 'Raw IssueFilter object (overrides convenience params)' },
         ...PAGINATION_PROPS,
+        ...INCLUDE_ARCHIVED_PROP,
+        ...ARCHIVED_ONLY_PROP,
         orderBy: { type: 'string', enum: [...ISSUE_ORDER_BY_VALUES], description: 'Sort: updatedAt (default) or createdAt' },
       },
     },
+    examples: [
+      {
+        title: 'Active issues (default)',
+        args: { workspace: 'personal', first: 50 },
+      },
+      {
+        title: 'Include archived and trashed issues',
+        args: { workspace: 'personal', includeArchived: true, first: 50 },
+      },
+      {
+        title: 'Only issues with archivedAt set',
+        args: { workspace: 'personal', archivedOnly: true, first: 50 },
+      },
+    ],
     async handler(args) {
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
-      const filter = buildIssueFilter(args)
-      const variables: Record<string, unknown> = {
-        filter: Object.keys(filter).length > 0 ? filter : undefined,
-        first: (args.first as number) || 50,
-        after: args.after as string | undefined,
-        orderBy: resolveIssueOrderBy(args.orderBy),
-      }
+      const variables = buildIssueSearchVariables(args)
       const data = await client.query(SEARCH_ISSUES_QUERY, variables)
       return JSON.stringify(data, null, 2)
     },
@@ -436,7 +464,7 @@ export const issueTools: ToolDef[] = [
   },
   {
     name: 'delete_issue',
-    description: 'Permanently delete an issue.',
+    description: "Move an issue to Linear's trash. Restore it during Linear's 30-day grace period with unarchive_issue; permanent deletion is not exposed.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -454,7 +482,7 @@ export const issueTools: ToolDef[] = [
   },
   {
     name: 'archive_issue',
-    description: 'Archive an issue (soft delete, can be unarchived).',
+    description: 'Archive an issue without moving it to trash. Restore it with unarchive_issue.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -472,7 +500,7 @@ export const issueTools: ToolDef[] = [
   },
   {
     name: 'unarchive_issue',
-    description: 'Unarchive a previously archived issue.',
+    description: 'Restore an archived or trashed issue.',
     inputSchema: {
       type: 'object',
       properties: {

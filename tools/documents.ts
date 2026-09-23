@@ -1,5 +1,5 @@
 import type { ToolDef } from './_types.js'
-import { WORKSPACE_PROP, PAGINATION_PROPS } from './_types.js'
+import { INCLUDE_ARCHIVED_PROP, WORKSPACE_PROP, PAGINATION_PROPS } from './_types.js'
 import { resolveWorkspace } from '../workspaces.js'
 import { LinearClient } from '../client.js'
 import { DEFAULT_EMBEDDED_COMMENT_LIMIT, listFullComments, resolveIssueId } from './commentRead.js'
@@ -18,7 +18,7 @@ export const DOCUMENT_PARENT_FIELDS = `
 `
 
 export const DOCUMENT_SUMMARY_FIELDS = `
-  id title icon color url documentContentId
+  id title icon color url documentContentId archivedAt trashed
   ${DOCUMENT_PARENT_FIELDS}
 `
 
@@ -58,8 +58,8 @@ const GET_DOCUMENT_QUERY = `
 `
 
 const SEARCH_DOCUMENTS_QUERY = `
-  query SearchDocuments($filter: DocumentFilter, $first: Int, $after: String) {
-    documents(filter: $filter, first: $first, after: $after) {
+  query SearchDocuments($filter: DocumentFilter, $first: Int, $after: String, $includeArchived: Boolean) {
+    documents(filter: $filter, first: $first, after: $after, includeArchived: $includeArchived) {
       pageInfo { hasNextPage endCursor }
       nodes {
         ${DOCUMENT_SUMMARY_FIELDS}
@@ -73,6 +73,15 @@ const SEARCH_DOCUMENTS_QUERY = `
 const DELETE_DOCUMENT_MUTATION = `
   mutation DeleteDocument($id: String!) {
     documentDelete(id: $id) { success }
+  }
+`
+
+const UNARCHIVE_DOCUMENT_MUTATION = `
+  mutation UnarchiveDocument($id: String!) {
+    documentUnarchive(id: $id) {
+      success
+      entity { ${DOCUMENT_SUMMARY_FIELDS} }
+    }
   }
 `
 
@@ -126,6 +135,8 @@ const DOCUMENT_SCHEMA_EXPECTED: Record<string, string[]> = {
     'project',
     'initiative',
     'team',
+    'archivedAt',
+    'trashed',
   ],
 }
 
@@ -265,7 +276,7 @@ export const documentTools: ToolDef[] = [
   },
   {
     name: 'search_documents',
-    description: 'Search and list documents. Optionally filter by issue, project, initiative, or team.',
+    description: 'Search and list documents. Active-only by default; include archived and trashed documents with includeArchived. Optionally filter by issue, project, initiative, or team.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -276,8 +287,15 @@ export const documentTools: ToolDef[] = [
         teamId: { type: 'string', description: 'Filter by team UUID' },
         filter: { type: 'object', description: 'Raw DocumentFilter object' },
         ...PAGINATION_PROPS,
+        ...INCLUDE_ARCHIVED_PROP,
       },
     },
+    examples: [
+      {
+        title: 'Include archived and trashed documents',
+        args: { workspace: 'personal', includeArchived: true, first: 50 },
+      },
+    ],
     async handler(args) {
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
@@ -293,6 +311,7 @@ export const documentTools: ToolDef[] = [
         filter: filter && Object.keys(filter).length > 0 ? filter : undefined,
         first: (args.first as number) || 50,
         after: args.after as string | undefined,
+        includeArchived: args.includeArchived === true,
       }
       const data = await client.query(SEARCH_DOCUMENTS_QUERY, variables)
       return JSON.stringify(data, null, 2)
@@ -315,7 +334,7 @@ export const documentTools: ToolDef[] = [
   },
   {
     name: 'delete_document',
-    description: 'Delete a document.',
+    description: "Move a document to Linear's trash. Restore it during Linear's 30-day grace period with unarchive_document.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -328,6 +347,24 @@ export const documentTools: ToolDef[] = [
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
       const data = await client.query(DELETE_DOCUMENT_MUTATION, { id: args.id })
+      return JSON.stringify(data, null, 2)
+    },
+  },
+  {
+    name: 'unarchive_document',
+    description: 'Restore an archived or trashed document.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...WORKSPACE_PROP,
+        id: { type: 'string', description: 'Document UUID or slug ID (required)' },
+      },
+      required: ['id'],
+    },
+    async handler(args) {
+      const ws = resolveWorkspace(args.workspace as string | undefined)
+      const client = new LinearClient(ws)
+      const data = await client.query(UNARCHIVE_DOCUMENT_MUTATION, { id: args.id })
       return JSON.stringify(data, null, 2)
     },
   },

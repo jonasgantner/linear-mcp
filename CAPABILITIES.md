@@ -3,8 +3,8 @@
 <!-- GENERATED FILE: run `bun run docs:capabilities` from this server directory. Do not hand-edit. -->
 
 **Server source**: `/Users/jonas/.agents/mcp/servers/linear`
-**Tool count**: 136
-**Workspace-aware tools**: 135/136
+**Tool count**: 138
+**Workspace-aware tools**: 137/138
 **Paginated tools**: 13
 
 ## Source Of Truth
@@ -55,6 +55,31 @@ When starting without recent context, follow this order:
 - Keep `/Users/jonas/.agents/skills/linear/SKILL.md` focused on routing, live discovery, and high-risk operating policy. Do not paste the tool table there.
 - Keep `/Users/jonas/.agents/skills/mcp-infra/SKILL.md` inventory-level; it should link to this generated file for Linear tool counts/details.
 
+## Archive And Trash Lifecycle
+
+- Linear connection reads omit archived and recently deleted items by default. `search_issues`, `search_projects`, `list_initiatives`, `search_documents`, and `list_cycles` preserve that active-only default.
+- Pass `includeArchived: true` to those five tools to include archived items and, where Linear exposes them through the same connection, recently deleted (`trashed`) items.
+- `search_issues` additionally accepts `archivedOnly: true`. It implies `includeArchived: true` and requires `archivedAt` to be non-null, so recently deleted issues can appear; inspect `trashed` to distinguish them.
+- Linear returns `trashed: true` for trashed resources and can return `trashed: null` after restoration; treat only `true` as trashed.
+- Projects, initiatives, documents, and cycles intentionally do not expose `archivedOnly`: their public Linear filters lack `archivedAt`, and client-side filtering would make cursor pagination unreliable.
+- Linear retains trashed resources for 30 days. The MCP does not expose permanent issue deletion.
+
+Copyable issue reads:
+
+- Active-only default: `{"workspace":"personal","first":50}`
+- Include archived and trashed: `{"workspace":"personal","includeArchived":true,"first":50}`
+- Archived timestamp required: `{"workspace":"personal","archivedOnly":true,"first":50}`
+
+| Resource | Archive/trash action | Restore | Lifecycle fields |
+|---|---|---|---|
+| Issue | `archive_issue`; `delete_issue` moves to trash | `unarchive_issue` | `archivedAt`, `autoArchivedAt`, `trashed` |
+| Project | `delete_project` moves to trash | `unarchive_project` restores archived or trashed projects | `archivedAt`, `autoArchivedAt`, `trashed` |
+| Initiative | `archive_initiative`; `delete_initiative` moves to trash | `unarchive_initiative` | `archivedAt`, `trashed` |
+| Document | `delete_document` moves to trash | `unarchive_document` | `archivedAt`, `trashed` |
+| Cycle | `cycle_archive` | No public GraphQL cycle-unarchive mutation | `archivedAt`, `autoArchivedAt` |
+
+**Breaking change:** `archive_project` was removed and replaced by `delete_project`, matching the underlying `projectDelete` trash semantics.
+
 ## Domain Index
 
 | Domain | Tools | Read | Write | Upload | Delete | Feature-gated |
@@ -62,15 +87,15 @@ When starting without recent context, follow this order:
 | Users | 1 | 1 | 0 | 0 | 0 | 0 |
 | Teams | 2 | 1 | 1 | 0 | 0 | 0 |
 | Issues | 11 | 3 | 7 | 0 | 1 | 0 |
-| Projects | 25 | 4 | 19 | 0 | 2 | 0 |
+| Projects | 25 | 4 | 18 | 0 | 3 | 0 |
 | Comments | 8 | 3 | 4 | 0 | 1 | 0 |
 | Cycles | 4 | 1 | 3 | 0 | 0 | 0 |
 | Labels | 14 | 4 | 8 | 0 | 2 | 0 |
-| Initiatives | 14 | 3 | 11 | 0 | 0 | 0 |
+| Initiatives | 15 | 3 | 11 | 0 | 1 | 0 |
 | Notifications | 7 | 2 | 5 | 0 | 0 | 0 |
 | Issue Relations | 3 | 0 | 2 | 0 | 1 | 0 |
 | Reactions | 2 | 0 | 1 | 0 | 1 | 0 |
-| Documents | 6 | 3 | 2 | 0 | 1 | 0 |
+| Documents | 7 | 3 | 3 | 0 | 1 | 0 |
 | Favorites | 4 | 1 | 2 | 0 | 1 | 0 |
 | Views | 7 | 3 | 3 | 0 | 1 | 0 |
 | Files | 11 | 0 | 1 | 10 | 0 | 0 |
@@ -102,7 +127,7 @@ Source files: `tools/issues.ts`
 
 | Tool | Effect | Required params | Input fields | Feature gate | Description |
 |---|---|---|---:|---|---|
-| `search_issues` | read | - | 12 | - | Search and filter issues. Supports convenience params (state, assignee, label, team, project, priority, query) or a raw IssueFilter object for advanced filtering. |
+| `search_issues` | read | - | 14 | - | Search and filter issues. Active-only by default. Supports archived reads plus convenience params (state, assignee, label, team, project, priority, query) or a raw IssueFilter object for advanced filtering. |
 | `get_issue` | read | `id` | 3 | - | Get a single issue by ID or identifier (e.g. "SPE-123"). Returns structured descriptionAssets, full comment assets/metadata, linked documents, children, and relations. |
 | `create_issue` | write | `teamId`, `title` | 15 | - | Create a new issue. Requires teamId and title at minimum. Supports the same routine organization fields as update_issue, including projectMilestoneId and subscriberIds. |
 | `update_issue` | write | `id` | 20 | - | Update an existing issue. Pass the issue ID and any fields to change. Nullable fields that Linear accepts can be cleared with raw JSON null: assigneeId, cycleId, projectId, projectMilestoneId, parentId, dueDate, estimate, and snoozedUntilAt. |
@@ -110,12 +135,15 @@ Source files: `tools/issues.ts`
 | `subscribe_issue` | write | `id` | 3 | - | Subscribe/watch an issue by adding a user to its subscriberIds. Omits userId to subscribe the authenticated Linear user. Idempotent: keeps existing subscribers. |
 | `unsubscribe_issue` | write | `id` | 3 | - | Unsubscribe/unwatch an issue by removing a user from its subscriberIds. Omits userId to unsubscribe the authenticated Linear user. Idempotent: keeps other subscribers. |
 | `issue_reminder` | write | `id`, `reminderAt` | 3 | - | Set a personal reminder on an issue. Fires as an inbox notification at `reminderAt` (type: issueReminder). Works on any issue regardless of state, but archived issues do NOT fire reminders. Calling again on the same issue overrides the prior reminder. |
-| `delete_issue` | delete | `id` | 2 | - | Permanently delete an issue. |
-| `archive_issue` | write | `id` | 2 | - | Archive an issue (soft delete, can be unarchived). |
-| `unarchive_issue` | write | `id` | 2 | - | Unarchive a previously archived issue. |
+| `delete_issue` | delete | `id` | 2 | - | Move an issue to Linear's trash. Restore it during Linear's 30-day grace period with unarchive_issue; permanent deletion is not exposed. |
+| `archive_issue` | write | `id` | 2 | - | Archive an issue without moving it to trash. Restore it with unarchive_issue. |
+| `unarchive_issue` | write | `id` | 2 | - | Restore an archived or trashed issue. |
 
 Examples:
 
+- `search_issues` (Active issues (default)): `{"workspace":"personal","first":50}`
+- `search_issues` (Include archived and trashed issues): `{"workspace":"personal","includeArchived":true,"first":50}`
+- `search_issues` (Only issues with archivedAt set): `{"workspace":"personal","archivedOnly":true,"first":50}`
 - `update_issue` (Move to project milestone): `{"workspace":"personal","id":"issue-uuid","projectId":"project-uuid","projectMilestoneId":"milestone-uuid"}`
 - `update_issue` (Clear organization fields): `{"workspace":"personal","id":"issue-uuid","assigneeId":null,"projectId":null,"projectMilestoneId":null,"cycleId":null,"parentId":null,"dueDate":null,"estimate":null,"snoozedUntilAt":null}` - Use JSON null to clear nullable issue fields that Linear supports.
 - `update_issue` (Add/remove labels by ID): `{"workspace":"personal","id":"issue-uuid","addedLabelIds":["label-uuid"],"removedLabelIds":["old-label-uuid"]}`
@@ -126,14 +154,14 @@ Source files: `tools/projects.ts`
 
 | Tool | Effect | Required params | Input fields | Feature gate | Description |
 |---|---|---|---:|---|---|
-| `search_projects` | read | - | 6 | - | Search and filter projects. This returns rich project readback; use first <= 25 and paginate to avoid Linear query-complexity limits. |
+| `search_projects` | read | - | 7 | - | Search and filter projects. Active-only by default; include archived and trashed projects with includeArchived. This returns rich project readback; use first <= 25 and paginate to avoid Linear query-complexity limits. |
 | `list_project_statuses` | read | - | 4 | - | List workspace-level project statuses. Use status IDs when creating or updating projects. |
 | `get_project_status` | read | `id` | 2 | - | Get one project status by UUID. |
 | `get_project` | read | `id` | 2 | - | Get a project by ID with content, direct comments, issues, members, and status updates. |
 | `create_project` | write | `name`, `teamIds` | 19 | - | Create a new project. |
 | `update_project` | write | `id` | 17 | - | Update an existing project. |
-| `archive_project` | write | `id` | 2 | - | Archive a project. This uses Linear projectDelete, which is reversible via unarchive_project. |
-| `unarchive_project` | write | `id` | 2 | - | Restore an archived project. |
+| `delete_project` | delete | `id` | 2 | - | Move a project to Linear's trash. Restore it during Linear's 30-day grace period with unarchive_project. |
+| `unarchive_project` | write | `id` | 2 | - | Restore an archived or trashed project. |
 | `create_project_status` | write | `name`, `color`, `position`, `type` | 8 | - | Create a workspace-level project status. Types: backlog, planned, started, paused, completed, canceled. |
 | `update_project_status` | write | `id` | 8 | - | Update a workspace-level project status. |
 | `archive_project_status` | write | `id` | 2 | - | Archive a project status. Reassign projects first if the status is in use. |
@@ -154,6 +182,7 @@ Source files: `tools/projects.ts`
 
 Examples:
 
+- `search_projects` (Include archived and trashed projects): `{"workspace":"interlink-group","includeArchived":true,"first":25}`
 - `create_project` (Sandbox project): `{"workspace":"personal","name":"Linear MCP Sandbox","teamIds":["team-uuid"],"state":"planned","icon":"Briefcase","color":"#5e6ad2"}`
 - `create_project_update` (Project status update): `{"workspace":"personal","projectId":"project-uuid","health":"onTrack","body":"Implementation is on track. Verification is passing."}`
 - `create_project_relation` (Project dependency): `{"workspace":"personal","type":"dependency","projectId":"source-project-uuid","anchorType":"end","relatedProjectId":"blocked-project-uuid","relatedAnchorType":"start"}` - Linear currently accepts dependency relations; anchors are start, end, or milestone.
@@ -189,10 +218,14 @@ Source files: `tools/cycles.ts`
 
 | Tool | Effect | Required params | Input fields | Feature gate | Description |
 |---|---|---|---:|---|---|
-| `list_cycles` | read | - | 6 | - | List cycles (sprints) for a team. Use "type" for quick access to current/next/previous cycle. |
+| `list_cycles` | read | - | 7 | - | List cycles (sprints) for a team. Active-only by default; include archived cycles with includeArchived. Use "type" for quick access to current/next/previous cycle. |
 | `create_cycle` | write | `teamId`, `startsAt`, `endsAt` | 6 | - | Create a new cycle (sprint) for a team. |
 | `update_cycle` | write | `id` | 6 | - | Update an existing cycle. |
-| `cycle_archive` | write | `id` | 2 | - | Archive a cycle. Linear has no hard-delete for cycles; archiving removes from active views while preserving history. Note: Linear rejects archiving the currently-active cycle. |
+| `cycle_archive` | write | `id` | 2 | - | Archive a cycle and unlink its assigned issues. Linear rejects archiving the currently active cycle, and its public GraphQL API exposes no cycle-unarchive mutation. |
+
+Examples:
+
+- `list_cycles` (Include archived cycles): `{"workspace":"interlink-group","includeArchived":true,"first":10}`
 
 ## Labels
 
@@ -231,13 +264,14 @@ Source files: `tools/initiatives.ts`
 
 | Tool | Effect | Required params | Input fields | Feature gate | Description |
 |---|---|---|---:|---|---|
-| `list_initiatives` | read | - | 4 | - | List all initiatives in the workspace. |
+| `list_initiatives` | read | - | 5 | - | List initiatives in the workspace. Active-only by default; include archived and trashed initiatives with includeArchived. |
 | `get_initiative` | read | `id` | 2 | - | Get a single initiative by ID with content, direct comments, linked projects, and updates. |
 | `list_initiative_project_links` | read | - | 5 | - | List initiative-project link records. Optional client-side filters support initiativeId and projectId. |
 | `create_initiative` | write | `name` | 14 | - | Create a new initiative. |
 | `update_initiative` | write | `id` | 19 | - | Update an existing initiative. |
 | `archive_initiative` | write | `id` | 2 | - | Archive an initiative. Reversible via unarchive_initiative. |
-| `unarchive_initiative` | write | `id` | 2 | - | Restore an archived initiative. |
+| `unarchive_initiative` | write | `id` | 2 | - | Restore an archived or trashed initiative. |
+| `delete_initiative` | delete | `id` | 2 | - | Move an initiative to Linear's trash. Restore it during Linear's 30-day grace period with unarchive_initiative. |
 | `link_initiative_project` | write | `initiativeId`, `projectId` | 4 | - | Link a project to an initiative. |
 | `update_initiative_project_link` | write | - | 5 | - | Update an initiative-project link record, currently used for sortOrder. |
 | `unlink_initiative_project` | write | - | 4 | - | Unlink a project from an initiative. Accepts EITHER `linkId` (the InitiativeToProject record UUID) directly, OR `initiativeId` + `projectId` (looks up the link automatically). Use the latter when you don't have the link ID handy. |
@@ -248,6 +282,7 @@ Source files: `tools/initiatives.ts`
 
 Examples:
 
+- `list_initiatives` (Include archived and trashed initiatives): `{"workspace":"personal","includeArchived":true,"first":50}`
 - `create_initiative` (Smoke initiative): `{"workspace":"personal","name":"MCP Smoke Initiative","status":"Proposed","priority":3,"icon":"MagicWand","color":"#5e6ad2"}`
 
 ## Notifications
@@ -304,14 +339,16 @@ Source files: `tools/documents.ts`
 | `create_document` | write | `title` | 9 | - | Create a document. Link to an issue, project, initiative, or team by passing the matching parent ID. |
 | `update_document` | write | `id` | 10 | - | Update a document title, content, icon, color, or parent association. |
 | `get_document` | read | `id` | 3 | - | Get a document by UUID, including full markdown content, structured content assets, and full comment metadata/assets. |
-| `search_documents` | read | - | 8 | - | Search and list documents. Optionally filter by issue, project, initiative, or team. |
+| `search_documents` | read | - | 9 | - | Search and list documents. Active-only by default; include archived and trashed documents with includeArchived. Optionally filter by issue, project, initiative, or team. |
 | `check_document_schema_drift` | read | - | 1 | - | Check the live Linear GraphQL schema for document create/update inputs, parent fields, and filters used by the MCP. |
-| `delete_document` | delete | `id` | 2 | - | Delete a document. |
+| `delete_document` | delete | `id` | 2 | - | Move a document to Linear's trash. Restore it during Linear's 30-day grace period with unarchive_document. |
+| `unarchive_document` | write | `id` | 2 | - | Restore an archived or trashed document. |
 
 Examples:
 
 - `create_document` (Issue document): `{"workspace":"personal","issueId":"J-559","title":"Decision log","content":"# Decision log\n\n..."}`
 - `create_document` (Team document): `{"workspace":"interlink-group","teamId":"team-uuid","title":"Team runbook","content":"Runbook body."}`
+- `search_documents` (Include archived and trashed documents): `{"workspace":"personal","includeArchived":true,"first":50}`
 
 ## Favorites
 
@@ -451,7 +488,7 @@ Source files: `tools/visualMetadata.ts`
 
 - `workspace` selects `interlink-group` or `personal` where the tool schema exposes it; `interlink-group` is the default.
 - Both workspaces authenticate with Jonas user tokens; comments and documents therefore appear as Jonas.
-- Prefer archive/unarchive tools over hard-delete tools except for approved self-cleaning live-test fixtures.
+- Archive is a reversible lifecycle state. `delete_issue`, `delete_project`, `delete_initiative`, and `delete_document` move resources to Linear trash; they do not permanently erase them immediately.
 - Binary/local file uploads use the file tools. URL/resource cards use attachment tools.
 - Private files are discovered as `get_issue.issue.descriptionAssets`, comment `assets`, or `get_document.document.contentAssets`, then downloaded with `download_file`.
 - Workspace-level views omit `teamId` and use shared organization preferences.

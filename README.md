@@ -40,6 +40,8 @@ bun run verify
 bun run smoke:tools
 bun run smoke:tools:local
 bun run smoke:views
+bun run smoke:archives
+bun run smoke:archives:write -- --workspace personal --confirm-live-write personal
 bun run smoke:comments -- --workspace personal --confirm-live-write personal
 bun run smoke:files -- --workspace interlink-group --confirm-live-write interlink-group
 ```
@@ -47,6 +49,12 @@ bun run smoke:files -- --workspace interlink-group --confirm-live-write interlin
 Use `bun run prepare:repo` before committing source changes. It refreshes the generated capabilities reference, then runs the normal local verification path. GitHub CI runs docs, build, and credential-free tool discovery; live Linear calls still depend on local credentials and the local MCP wrapper layout.
 
 Live-write tests are opt-in and have no workspace default. Each run must pass an explicit `personal` or `interlink-group` target and repeat that exact value in `--confirm-live-write`. These narrow tests use unique fixture names, delete their current-run artifacts in `finally`, and exit nonzero if cleanup fails. Normal CI and verification remain unit/read-only by default.
+
+## Archive and trash
+
+Core issue, project, initiative, document, and cycle reads are active-only by default. Pass `includeArchived: true` to include archived resources; issue search also supports `archivedOnly: true`, which means `archivedAt` is non-null and can therefore include recently deleted issues. Use the returned `trashed` field to distinguish trash from ordinary archive state.
+
+Linear keeps deleted items in recoverable trash for 30 days. The MCP names those mutations `delete_*`, does not expose permanent issue deletion, and provides restore tools for issues, projects, initiatives, and documents. Cycle archive is the exception: Linear's public GraphQL API currently exposes no cycle-unarchive mutation. The old `archive_project` tool was intentionally replaced by `delete_project` because the underlying mutation is `projectDelete`.
 
 ## Layout
 

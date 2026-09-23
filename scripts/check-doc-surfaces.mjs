@@ -12,6 +12,8 @@ const surfaces = [
       /Do not copy tool tables into skills, README sections, or Linear comments\./,
       /Workspaces: `interlink-group` and `personal`/,
       /Live-write tests are opt-in and have no workspace default\./,
+      /## Archive and trash/,
+      /30 days/,
     ],
     forbidden: [
       /106 tools/,
@@ -19,6 +21,8 @@ const surfaces = [
       /LINEAR[_]TEST/,
       /Codex[ ]Test/,
       /linear[-]app[-]actor[-]test/,
+      /Permanently delete an issue\./,
+      /Archive a project\. This uses Linear projectDelete/,
     ],
   },
   {
@@ -28,6 +32,9 @@ const surfaces = [
       /## Fresh Session Tool Use/,
       /## Metadata Maintenance Contract/,
       /Tool count\*\*: \d+/,
+      /## Archive And Trash Lifecycle/,
+      /`archive_project` was removed and replaced by `delete_project`/,
+      /No public GraphQL cycle-unarchive mutation/,
     ],
     forbidden: [
       /106 tools/,
@@ -35,6 +42,8 @@ const surfaces = [
       /LINEAR[_]TEST/,
       /Codex[ ]Test/,
       /`TEST[-]`/,
+      /Permanently delete an issue\./,
+      /Archive a project\. This uses Linear projectDelete/,
     ],
   },
   {
@@ -46,12 +55,15 @@ const surfaces = [
       /generated `CAPABILITIES\.md` is the human-readable index/,
       /\| `personal` \| Personal tasks/,
       /\| `interlink-group` \| Business operations/,
+      /recoverable trash/,
+      /permanent deletion is not exposed/,
     ],
     forbidden: [
       /106 tools/,
       /116 tools/,
       /\| `test` \|/,
       /`TEST[-]`/,
+      /Hard delete only when Jonas explicitly asks to delete\./,
     ],
   },
   {
