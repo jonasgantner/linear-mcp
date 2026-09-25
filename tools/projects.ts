@@ -20,10 +20,10 @@ const PROJECT_UPDATE_FIELDS = `
 
 const PROJECT_RELATION_FIELDS = `
   id type anchorType relatedAnchorType archivedAt createdAt updatedAt
-  project { id name url }
-  projectMilestone { id name project { id name url } }
-  relatedProject { id name url }
-  relatedProjectMilestone { id name project { id name url } }
+  project { id identifier name url }
+  projectMilestone { id name project { id identifier name url } }
+  relatedProject { id identifier name url }
+  relatedProjectMilestone { id name project { id identifier name url } }
   user { id name }
 `
 
@@ -32,13 +32,13 @@ const SEARCH_PROJECTS_QUERY = `
     projects(filter: $filter, first: $first, after: $after, includeArchived: $includeArchived) {
       pageInfo { hasNextPage endCursor }
       nodes {
-        id name description url state archivedAt autoArchivedAt trashed startDate targetDate progress
+        id identifier name description url state archivedAt autoArchivedAt trashed startDate targetDate progress
         status { ${PROJECT_STATUS_FIELDS} }
         lead { id name }
         teams { nodes { id name key } }
         members { nodes { id name } }
         labels { nodes { id name color description isGroup } }
-        initiatives { nodes { id name url status priority prioritySortOrder color icon targetDate } }
+        initiatives { nodes { id identifier name url status priority prioritySortOrder color icon targetDate } }
       }
     }
   }
@@ -47,18 +47,18 @@ const SEARCH_PROJECTS_QUERY = `
 const GET_PROJECT_QUERY = `
   query GetProject($id: String!) {
     project(id: $id) {
-      id name description content contentState url state archivedAt autoArchivedAt trashed icon color priority startDate targetDate progress
+      id identifier name description content contentState url state archivedAt autoArchivedAt trashed icon color priority startDate targetDate progress
       documentContent { id }
       status { ${PROJECT_STATUS_FIELDS} }
       lead { id name }
       teams { nodes { id name key } }
       members { nodes { id name } }
       labels { nodes { id name color description isGroup } }
-      initiatives { nodes { id name url description status priority prioritySortOrder color icon targetDate owner { id name } } }
-      initiativeToProjects { nodes { id sortOrder initiative { id name url status priority prioritySortOrder } } }
+      initiatives { nodes { id identifier name url description status priority prioritySortOrder color icon targetDate owner { id name } } }
+      initiativeToProjects { nodes { id sortOrder initiative { id identifier name url status priority prioritySortOrder } } }
       issues { nodes { id identifier title url state { name } priority assignee { name } } }
       documents { nodes { ${DOCUMENT_SUMMARY_FIELDS} } }
-      projectMilestones { nodes { id name description targetDate sortOrder project { id name url } } }
+      projectMilestones { nodes { id name description targetDate sortOrder project { id identifier name url } } }
       projectUpdates { nodes { ${PROJECT_UPDATE_FIELDS} } }
       relations { nodes { ${PROJECT_RELATION_FIELDS} } }
       comments {
@@ -92,7 +92,7 @@ const CREATE_PROJECT_MUTATION = `
   mutation CreateProject($input: ProjectCreateInput!) {
     projectCreate(input: $input) {
       success
-      project { id name url state status { ${PROJECT_STATUS_FIELDS} } }
+      project { id identifier name url state status { ${PROJECT_STATUS_FIELDS} } }
     }
   }
 `
@@ -101,7 +101,7 @@ const UPDATE_PROJECT_MUTATION = `
   mutation UpdateProject($id: String!, $input: ProjectUpdateInput!) {
     projectUpdate(id: $id, input: $input) {
       success
-      project { id name url state icon color priority status { ${PROJECT_STATUS_FIELDS} } }
+      project { id identifier name url state icon color priority status { ${PROJECT_STATUS_FIELDS} } }
     }
   }
 `
@@ -116,7 +116,7 @@ const UNARCHIVE_PROJECT_MUTATION = `
   mutation UnarchiveProject($id: String!) {
     projectUnarchive(id: $id) {
       success
-      entity { id name archivedAt autoArchivedAt trashed url state status { ${PROJECT_STATUS_FIELDS} } }
+      entity { id identifier name archivedAt autoArchivedAt trashed url state status { ${PROJECT_STATUS_FIELDS} } }
     }
   }
 `
@@ -244,7 +244,7 @@ const CREATE_PROJECT_MILESTONE_MUTATION = `
   mutation CreateProjectMilestone($input: ProjectMilestoneCreateInput!) {
     projectMilestoneCreate(input: $input) {
       success
-      projectMilestone { id name description targetDate sortOrder project { id name url } }
+      projectMilestone { id name description targetDate sortOrder project { id identifier name url } }
     }
   }
 `
@@ -253,7 +253,7 @@ const UPDATE_PROJECT_MILESTONE_MUTATION = `
   mutation UpdateProjectMilestone($id: String!, $input: ProjectMilestoneUpdateInput!) {
     projectMilestoneUpdate(id: $id, input: $input) {
       success
-      projectMilestone { id name description targetDate project { id name url } }
+      projectMilestone { id name description targetDate project { id identifier name url } }
     }
   }
 `
@@ -304,7 +304,7 @@ async function buildProjectInput(
 export const projectTools: ToolDef[] = [
   {
     name: 'search_projects',
-    description: 'Search and filter projects. Active-only by default; include archived and trashed projects with includeArchived. This returns rich project readback; use first <= 25 and paginate to avoid Linear query-complexity limits.',
+    description: 'Search and filter projects. Returned projects include both canonical UUID `id` and nullable human-readable `identifier`. Active-only by default; include archived and trashed projects with includeArchived. This returns rich project readback; use first <= 25 and paginate to avoid Linear query-complexity limits.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -385,12 +385,12 @@ export const projectTools: ToolDef[] = [
   },
   {
     name: 'get_project',
-    description: 'Get a project by ID with content, direct comments, issues, members, and status updates.',
+    description: 'Get a project by UUID or human-readable identifier with content, direct comments, issues, members, and status updates.',
     inputSchema: {
       type: 'object',
       properties: {
         ...WORKSPACE_PROP,
-        id: { type: 'string', description: 'Project UUID' },
+        id: { type: 'string', description: 'Project UUID or human-readable identifier (e.g. "P-SPE-107")' },
       },
       required: ['id'],
     },

@@ -12,8 +12,8 @@ import {
 
 export const DOCUMENT_PARENT_FIELDS = `
   issue { id identifier title url }
-  project { id name url }
-  initiative { id name url }
+  project { id identifier name url }
+  initiative { id identifier name url }
   team { id name key }
 `
 

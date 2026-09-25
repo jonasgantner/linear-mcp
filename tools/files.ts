@@ -124,7 +124,7 @@ const UPDATE_DOCUMENT_MUTATION = `
 
 const GET_PROJECT_CONTENT_QUERY = `
   query GetProjectContent($id: String!) {
-    project(id: $id) { id name url content }
+    project(id: $id) { id identifier name url content }
   }
 `
 
@@ -132,7 +132,7 @@ const UPDATE_PROJECT_CONTENT_MUTATION = `
   mutation UpdateProjectContent($id: String!, $input: ProjectUpdateInput!) {
     projectUpdate(id: $id, input: $input) {
       success
-      project { id name url content }
+      project { id identifier name url content }
     }
   }
 `
@@ -148,7 +148,7 @@ const CREATE_PROJECT_UPDATE_MUTATION = `
 
 const GET_INITIATIVE_CONTENT_QUERY = `
   query GetInitiativeContent($id: String!) {
-    initiative(id: $id) { id name url content }
+    initiative(id: $id) { id identifier name url content }
   }
 `
 
@@ -156,7 +156,7 @@ const UPDATE_INITIATIVE_CONTENT_MUTATION = `
   mutation UpdateInitiativeContent($id: String!, $input: InitiativeUpdateInput!) {
     initiativeUpdate(id: $id, input: $input) {
       success
-      initiative { id name url status priority prioritySortOrder color }
+      initiative { id identifier name url status priority prioritySortOrder color }
     }
   }
 `

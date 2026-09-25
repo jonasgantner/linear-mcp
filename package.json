@@ -5,9 +5,9 @@
   "scripts": {
     "start": "bun run index.ts",
     "build": "bun build ./index.ts --target=bun --outdir /tmp/linear-mcp-build",
-    "ci": "bun run docs:check && bun run build && bun run test:files && bun run test:routing && bun run test:archives && bun run test:live-write-guard && bun run smoke:tools",
+    "ci": "bun run docs:check && bun run build && bun run test:files && bun run test:routing && bun run test:archives && bun run test:identifiers && bun run test:live-write-guard && bun run smoke:tools",
     "prepare:repo": "bun run docs:capabilities && bun run verify",
-    "verify": "bun run ci && bun run smoke:views && bun run smoke:archives",
+    "verify": "bun run ci && bun run smoke:views && bun run smoke:archives && bun run smoke:identifiers",
     "docs:capabilities": "bun run scripts/generate-capabilities.ts",
     "docs:surfaces": "node scripts/check-doc-surfaces.mjs",
     "docs:check": "bun run scripts/generate-capabilities.ts --check && bun run docs:surfaces",
@@ -21,7 +21,9 @@
     "test:files": "bun run scripts/test-file-read.ts",
     "test:routing": "bun run scripts/test-routing.ts",
     "test:archives": "bun run scripts/test-archive-options.ts",
+    "test:identifiers": "bun run scripts/test-entity-identifiers.ts",
     "test:live-write-guard": "node scripts/test-live-write-guard.mjs",
+    "smoke:identifiers": "node scripts/smoke-entity-identifiers.mjs",
     "smoke:files": "node scripts/smoke-files-read.mjs"
   },
   "dependencies": {

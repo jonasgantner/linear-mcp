@@ -41,6 +41,7 @@ bun run smoke:tools
 bun run smoke:tools:local
 bun run smoke:views
 bun run smoke:archives
+bun run smoke:identifiers
 bun run smoke:archives:write -- --workspace personal --confirm-live-write personal
 bun run smoke:comments -- --workspace personal --confirm-live-write personal
 bun run smoke:files -- --workspace interlink-group --confirm-live-write interlink-group
@@ -49,6 +50,12 @@ bun run smoke:files -- --workspace interlink-group --confirm-live-write interlin
 Use `bun run prepare:repo` before committing source changes. It refreshes the generated capabilities reference, then runs the normal local verification path. GitHub CI runs docs, build, and credential-free tool discovery; live Linear calls still depend on local credentials and the local MCP wrapper layout.
 
 Live-write tests are opt-in and have no workspace default. Each run must pass an explicit `personal` or `interlink-group` target and repeat that exact value in `--confirm-live-write`. These narrow tests use unique fixture names, delete their current-run artifacts in `finally`, and exit nonzero if cleanup fails. Normal CI and verification remain unit/read-only by default.
+
+## Durable entity identifiers
+
+Project and initiative readbacks expose both the canonical UUID `id` and Linear's nullable human-readable `identifier`. `get_project` accepts either a project UUID or identifier such as `P-SPE-107`; `get_initiative` accepts either an initiative UUID or identifier such as `I-11`.
+
+Keep `workspace` explicit when using human-readable identifiers. Initiative identifiers are workspace-scoped, and project identifiers can be null when Linear has not assigned one, such as a project without a lead team. UUIDs remain the canonical machine keys for mutation inputs unless a tool explicitly documents broader lookup support.
 
 ## Archive and trash
 

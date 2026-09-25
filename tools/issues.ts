@@ -13,7 +13,7 @@ const ISSUE_FIELDS = `
   state { id name type color }
   assignee { id name email }
   team { id name key }
-  project { id name url }
+  project { id identifier name url }
   projectMilestone { id name targetDate }
   cycle { id number name startsAt endsAt }
   parent { id identifier title url }

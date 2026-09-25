@@ -14,7 +14,7 @@ const INITIATIVE_STATUS_DESCRIPTION = 'Status: Proposed, Planned, Active, Comple
 const INITIATIVE_PRIORITY_DESCRIPTION = '0=none, 1=urgent, 2=high, 3=medium, 4=low'
 
 const INITIATIVE_FIELDS = `
-  id name description content url status priority prioritySortOrder color icon archivedAt trashed
+  id identifier name description content url status priority prioritySortOrder color icon archivedAt trashed
   targetDate targetDateResolution
   owner { id name }
   createdAt updatedAt
@@ -22,8 +22,8 @@ const INITIATIVE_FIELDS = `
 
 const INITIATIVE_PROJECT_LINK_FIELDS = `
   id sortOrder archivedAt
-  initiative { id name url status priority prioritySortOrder color icon targetDate }
-  project { id name url state progress status { id name type color } }
+  initiative { id identifier name url status priority prioritySortOrder color icon targetDate }
+  project { id identifier name url state progress status { id name type color } }
 `
 
 const INITIATIVE_UPDATE_FIELDS = `
@@ -31,7 +31,7 @@ const INITIATIVE_UPDATE_FIELDS = `
 `
 
 const LIST_INITIATIVE_FIELDS = `
-  id name description url status priority prioritySortOrder color icon archivedAt trashed
+  id identifier name description url status priority prioritySortOrder color icon archivedAt trashed
   targetDate targetDateResolution
   owner { id name }
   createdAt updatedAt
@@ -52,7 +52,7 @@ const LIST_INITIATIVES_WITH_PROJECTS_QUERY = `
       pageInfo { hasNextPage endCursor }
       nodes {
         ${LIST_INITIATIVE_FIELDS}
-        projects { nodes { id name url state progress status { id name type color } } }
+        projects { nodes { id identifier name url state progress status { id name type color } } }
       }
     }
   }
@@ -63,7 +63,7 @@ const GET_INITIATIVE_QUERY = `
     initiative(id: $id) {
       ${INITIATIVE_FIELDS}
       documentContent { id }
-      projects { nodes { id name url state progress status { id name type color } } }
+      projects { nodes { id identifier name url state progress status { id name type color } } }
       documents { nodes { ${DOCUMENT_SUMMARY_FIELDS} } }
       initiativeUpdates { nodes { ${INITIATIVE_UPDATE_FIELDS} } }
     }
@@ -141,7 +141,7 @@ const FIND_INITIATIVE_PROJECT_LINK_QUERY = `
   query FindInitiativeProjectLink($first: Int, $after: String) {
     initiativeToProjects(first: $first, after: $after) {
       pageInfo { hasNextPage endCursor }
-      nodes { id sortOrder initiative { id name url } project { id name url } }
+      nodes { id sortOrder initiative { id identifier name url } project { id identifier name url } }
     }
   }
 `
@@ -208,8 +208,8 @@ const DELETE_INITIATIVE_MUTATION = `
 type InitiativeProjectLink = {
   id: string
   sortOrder?: string
-  initiative: { id: string; name?: string; url?: string }
-  project: { id: string; name?: string; url?: string }
+  initiative: { id: string; identifier?: string | null; name?: string; url?: string }
+  project: { id: string; identifier?: string | null; name?: string; url?: string }
 }
 
 async function listInitiativeProjectLinks(
@@ -255,7 +255,7 @@ async function findInitiativeProjectLink(
 export const initiativeTools: ToolDef[] = [
   {
     name: 'list_initiatives',
-    description: 'List initiatives in the workspace. Active-only by default; include archived and trashed initiatives with includeArchived.',
+    description: 'List initiatives in the workspace. Returned initiatives include both canonical UUID `id` and nullable human-readable `identifier`. Active-only by default; include archived and trashed initiatives with includeArchived.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -288,23 +288,24 @@ export const initiativeTools: ToolDef[] = [
   },
   {
     name: 'get_initiative',
-    description: 'Get a single initiative by ID with content, direct comments, linked projects, and updates.',
+    description: 'Get a single initiative by UUID or human-readable identifier with content, direct comments, linked projects, and updates.',
     inputSchema: {
       type: 'object',
       properties: {
         ...WORKSPACE_PROP,
-        id: { type: 'string', description: 'Initiative UUID' },
+        id: { type: 'string', description: 'Initiative UUID or human-readable identifier (e.g. "I-11")' },
       },
       required: ['id'],
     },
     async handler(args) {
       const ws = resolveWorkspace(args.workspace as string | undefined)
       const client = new LinearClient(ws)
-      const data = await client.query<{ initiative: { comments?: unknown } }>(GET_INITIATIVE_QUERY, { id: args.id })
-      const comments = await client.query(GET_INITIATIVE_COMMENTS_QUERY, { initiativeId: args.id })
+      const data = await client.query<{ initiative: { id: string; comments?: unknown } }>(GET_INITIATIVE_QUERY, { id: args.id })
+      const resolvedInitiativeId = data.initiative.id
+      const comments = await client.query(GET_INITIATIVE_COMMENTS_QUERY, { initiativeId: resolvedInitiativeId })
       data.initiative.comments = (comments as { comments: unknown }).comments
       ;(data.initiative as { initiativeToProjects?: { nodes: InitiativeProjectLink[] } }).initiativeToProjects = {
-        nodes: await listInitiativeProjectLinks(client, { initiativeId: args.id as string }),
+        nodes: await listInitiativeProjectLinks(client, { initiativeId: resolvedInitiativeId }),
       }
       return JSON.stringify(data, null, 2)
     },

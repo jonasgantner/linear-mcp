@@ -19,7 +19,7 @@ const NOTIFICATION_FIELDS = `
   ... on ProjectNotification {
     projectId
     projectUpdateId
-    project { id name url }
+    project { id identifier name url }
     projectUpdate { id body health url }
     comment { id body url }
     parentComment { id body url }
@@ -28,7 +28,7 @@ const NOTIFICATION_FIELDS = `
   ... on InitiativeNotification {
     initiativeId
     initiativeUpdateId
-    initiative { id name url status priority prioritySortOrder }
+    initiative { id identifier name url status priority prioritySortOrder }
     initiativeUpdate { id body health url }
     comment { id body url }
     parentComment { id body url }

@@ -47,6 +47,20 @@ When starting without recent context, follow this order:
 | Templates and recurring issues | `list_templates`, `get_template` | template tools, recurring-template helpers | Deleting a recurring template stops future issues but already-created issues must be archived separately. |
 | Notifications/subscriptions | `list_notifications`, `get_issue` | notification tools, `subscribe_issue`, `unsubscribe_issue`, `issue_reminder` | Live notification tests can affect inbox state; keep them opt-in. |
 
+## Durable Project And Initiative Identifiers
+
+- Project and initiative readbacks include both canonical UUID `id` and Linear's nullable human-readable `identifier`.
+- `get_project` accepts a UUID or project identifier such as `P-SPE-107`; `get_initiative` accepts a UUID or initiative identifier such as `I-11`.
+- Keep `workspace` explicit: initiative identifiers are workspace-scoped, and similarly numbered identifiers can exist in both workspaces.
+- Project identifiers can be null when Linear has not assigned one, such as a project without a lead team. Keep UUIDs as canonical mutation keys unless a tool explicitly documents broader lookup support.
+- Tested live on 2026-09-25 in both `personal` and `interlink-group`: list readbacks returned identifiers, identifier lookups resolved to the same UUIDs, and initiative-project links survived identifier lookup.
+
+## Schema Fixes Applied During Testing
+
+| Fix | Issue | Resolution |
+|---|---|---|
+| Durable project and initiative identifiers | Core and nested readbacks omitted `Project.identifier` and `Initiative.identifier`; `get_initiative` accepted an identifier but used it as a UUID when loading link records, producing an empty link list. | Added identifiers to project/initiative readbacks and resolved the initiative UUID before secondary comment/link reads. |
+
 ## Metadata Maintenance Contract
 
 - Runtime tool descriptions should say what the tool does, key side effects, accepted formats, and important safety constraints.
@@ -154,10 +168,10 @@ Source files: `tools/projects.ts`
 
 | Tool | Effect | Required params | Input fields | Feature gate | Description |
 |---|---|---|---:|---|---|
-| `search_projects` | read | - | 7 | - | Search and filter projects. Active-only by default; include archived and trashed projects with includeArchived. This returns rich project readback; use first <= 25 and paginate to avoid Linear query-complexity limits. |
+| `search_projects` | read | - | 7 | - | Search and filter projects. Returned projects include both canonical UUID `id` and nullable human-readable `identifier`. Active-only by default; include archived and trashed projects with includeArchived. This returns rich project readback; use first <= 25 and paginate to avoid Linear query-complexity limits. |
 | `list_project_statuses` | read | - | 4 | - | List workspace-level project statuses. Use status IDs when creating or updating projects. |
 | `get_project_status` | read | `id` | 2 | - | Get one project status by UUID. |
-| `get_project` | read | `id` | 2 | - | Get a project by ID with content, direct comments, issues, members, and status updates. |
+| `get_project` | read | `id` | 2 | - | Get a project by UUID or human-readable identifier with content, direct comments, issues, members, and status updates. |
 | `create_project` | write | `name`, `teamIds` | 19 | - | Create a new project. |
 | `update_project` | write | `id` | 17 | - | Update an existing project. |
 | `delete_project` | delete | `id` | 2 | - | Move a project to Linear's trash. Restore it during Linear's 30-day grace period with unarchive_project. |
@@ -264,8 +278,8 @@ Source files: `tools/initiatives.ts`
 
 | Tool | Effect | Required params | Input fields | Feature gate | Description |
 |---|---|---|---:|---|---|
-| `list_initiatives` | read | - | 5 | - | List initiatives in the workspace. Active-only by default; include archived and trashed initiatives with includeArchived. |
-| `get_initiative` | read | `id` | 2 | - | Get a single initiative by ID with content, direct comments, linked projects, and updates. |
+| `list_initiatives` | read | - | 5 | - | List initiatives in the workspace. Returned initiatives include both canonical UUID `id` and nullable human-readable `identifier`. Active-only by default; include archived and trashed initiatives with includeArchived. |
+| `get_initiative` | read | `id` | 2 | - | Get a single initiative by UUID or human-readable identifier with content, direct comments, linked projects, and updates. |
 | `list_initiative_project_links` | read | - | 5 | - | List initiative-project link records. Optional client-side filters support initiativeId and projectId. |
 | `create_initiative` | write | `name` | 14 | - | Create a new initiative. |
 | `update_initiative` | write | `id` | 19 | - | Update an existing initiative. |

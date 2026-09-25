@@ -9,14 +9,14 @@ const FAVORITE_FIELDS = `
   parent { id title folderName sortOrder url }
   children { nodes { id type title folderName sortOrder url } }
   issue { id identifier title url }
-  project { id name url }
+  project { id identifier name url }
   projectTab
   predefinedViewType
   predefinedViewTeam { id name key }
   cycle { id number name }
   customView { id name slugId icon color }
   document { id title url }
-  initiative { id name url }
+  initiative { id identifier name url }
   initiativeTab
   label { id name color }
   projectLabel { id name color }
